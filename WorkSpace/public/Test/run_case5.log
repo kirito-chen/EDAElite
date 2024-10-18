@@ -1,0 +1,161 @@
+Track-8 Checker V0.4
+
+read_arch /home/public/Arch/fpga.lib /home/public/Arch/fpga.scl /home/public/Arch/fpga.clk
+  Successfully read architecture files.
+
+report_arch
+  Number of columns: 150
+  Number of rows: 300
+  Number of clock regions: 25
+
+  Tile Count by Type:
+  ------------------------------------------
+  Type                | Count
+  ------------------------------------------
+  GCLK                | 5
+  IOA                 | 42
+  IOB                 | 112
+  RAMB                | 120
+  RAMA                | 1200
+  DSP                 | 1800
+  IPPIN               | 2700
+  PLB                 | 30840
+  ------------------------------------------
+
+read_design /home/public/Benchmark/public_release/case_5.nodes /home/public/Benchmark/public_release/case_5.nets /home/public/Benchmark/public_release/case_5.timing
+  Successfully read design files.
+
+report_design
+  Number of instances: 154415
+  ------------------------------------------
+  Type                | Total     | Fixed     
+  ------------------------------------------
+  CARRY4              | 2240      | 2240      
+  DRAM                | 128       | 128       
+  DSP                 | 6         | 6         
+  F7MUX               | 481       | 481       
+  F8MUX               | 222       | 222       
+  GCLK                | 9         | 9         
+  IOA                 | 65        | 65        
+  IOB                 | 97        | 97        
+  IPPIN               | 13874     | 13874     
+  LUT                 | 73908     | 27198     
+  RAMA                | 385       | 385       
+  SEQ                 | 63000     | 0         
+  ------------------------------------------
+
+  Number of nets: 143495
+  Number of clock nets: 34
+  ------------------------------------------
+  Group                 | Count   
+  ------------------------------------------
+  grp1: < 2 pins        | 0         
+  grp2: 2 pins          | 94210     
+  grp3: 3~10 pins       | 40761     
+  grp4: 11~50 pins      | 7973      
+  grp5: 51~100 pins     | 460       
+  grp6: 101~1000 pins   | 86        
+  grp7: >1000 pins      | 5         
+  ------------------------------------------
+
+  29010 out of 143495 are intra-tile nets.
+  47261 out of 675168 are timing critical pins.
+
+read_output /home/public/Test/Result/case_5.nodes.out
+
+  Instance Statistics:
+  -----------------------------------------------
+  Category | Count     | Re-placed   | %Re-placed 
+  -----------------------------------------------
+  Total    | 154415    | -           | -          
+  Fixed    | 44705     | 0           | 0.0      % 
+  Movable  | 109710    | 0           | 0.0      % 
+  -----------------------------------------------
+  Successfully read output file.
+
+legal_check
+  1.1 Check instance location and tile capacity.
+        Baseline placement passed capacity check.
+        Optimized placement passed capacity check.
+  1.2 Check control set constraint.
+        Baseline placement:
+          Checked control set on 30840 tiles.
+          Control Set Statistics(tile count v.s number of control nets):
+          ---------------------------------------
+          |       |  0  |  1  |  2  |  3  |  4  |
+          ---------------------------------------
+          | Clock |15160|14181|1499 |0    |0    |
+          | Reset |19090|10414|1336 |0    |0    |
+          | CE    |22153|6340 |2347 |0    |0    |
+          ---------------------------------------
+        Optimized placement:
+          Checked control set on 30840 tiles.
+          Control Set Statistics(tile count v.s number of control nets):
+          ---------------------------------------
+          |       |  0  |  1  |  2  |  3  |  4  |
+          ---------------------------------------
+          | Clock |15160|14181|1499 |0    |0    |
+          | Reset |19090|10414|1336 |0    |0    |
+          | CE    |22153|6340 |2347 |0    |0    |
+          ---------------------------------------
+  1.3 Check clock region constraint.
+        Baseline placement:
+          | 5 | 2 | 3 | 3 | 6 | 
+          | 2 | 4 | 6 | 5 | 12| 
+          | 3 | 3 | 6 | 4 | 5 | 
+          | 5 | 2 | 4 | 4 | 4 | 
+          | 2 | 1 | 2 | 1 | 1 | 
+          All clock regions passed legal check.
+        Optimized placement:
+          | 5 | 2 | 3 | 3 | 6 | 
+          | 2 | 4 | 6 | 5 | 12| 
+          | 3 | 3 | 6 | 4 | 5 | 
+          | 5 | 2 | 4 | 4 | 4 | 
+          | 2 | 1 | 2 | 1 | 1 | 
+          All clock regions passed legal check.
+  Legalization check passed.
+
+report_wirelength
+  Baseline wirelength: total = 1507481; crit = 410912 (27.26%)
+  Optimized wirelength: total  = 1507481; crit = 410912 (27.26%)
+
+report_pin_density
+  Baseline: 
+    Checked pin density on 20289 tiles; top 5% count = 1014 tiles.
+    List of Top-10 Congested Tiles
+    ------------------------------------------
+    Location | Input  | Output | Pin Density %
+    X77Y210  | 47/112  | 11/32  | 40.28%
+    X75Y206  | 46/112  | 10/32  | 38.89%
+    X74Y209  | 43/112  | 13/32  | 38.89%
+    X72Y203  | 46/112  | 8 /32  | 37.50%
+    X116Y226 | 38/112  | 15/32  | 36.81%
+    X83Y211  | 43/112  | 10/32  | 36.81%
+    X77Y204  | 44/112  | 9 /32  | 36.81%
+    X74Y199  | 44/112  | 9 /32  | 36.81%
+    X83Y203  | 38/112  | 14/32  | 36.11%
+    ...
+    ------------------------------------------
+    Baseline top 5% congested tiles (1014 tiles) avg. pin density: 25.72%
+
+  Optimized: 
+    Checked pin density on 20289 tiles.
+    List of Top-10 Congested Tiles
+    ------------------------------------------
+    Location | Input  | Output | Pin Density %
+    X77Y210  | 47/112  | 11/32  | 40.28%
+    X75Y206  | 46/112  | 10/32  | 38.89%
+    X74Y209  | 43/112  | 13/32  | 38.89%
+    X72Y203  | 46/112  | 8 /32  | 37.50%
+    X116Y226 | 38/112  | 15/32  | 36.81%
+    X83Y211  | 43/112  | 10/32  | 36.81%
+    X77Y204  | 44/112  | 9 /32  | 36.81%
+    X74Y199  | 44/112  | 9 /32  | 36.81%
+    X83Y203  | 38/112  | 14/32  | 36.11%
+    ...
+    ------------------------------------------
+    Optimized top 5% congested tiles(1014 tiles) avg. pin density: 25.72%
+
+
+exit
+Main program result: true

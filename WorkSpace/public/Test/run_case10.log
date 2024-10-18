@@ -1,0 +1,161 @@
+Track-8 Checker V0.4
+
+read_arch /home/public/Arch/fpga.lib /home/public/Arch/fpga.scl /home/public/Arch/fpga.clk
+  Successfully read architecture files.
+
+report_arch
+  Number of columns: 150
+  Number of rows: 300
+  Number of clock regions: 25
+
+  Tile Count by Type:
+  ------------------------------------------
+  Type                | Count
+  ------------------------------------------
+  GCLK                | 5
+  IOA                 | 42
+  IOB                 | 112
+  RAMB                | 120
+  RAMA                | 1200
+  DSP                 | 1800
+  IPPIN               | 2700
+  PLB                 | 30840
+  ------------------------------------------
+
+read_design /home/public/Benchmark/public_release/case_10.nodes /home/public/Benchmark/public_release/case_10.nets /home/public/Benchmark/public_release/case_10.timing
+  Successfully read design files.
+
+report_design
+  Number of instances: 486522
+  ------------------------------------------
+  Type                | Total     | Fixed     
+  ------------------------------------------
+  CARRY4              | 630       | 630       
+  DRAM                | 3815      | 3815      
+  DSP                 | 105       | 105       
+  F7MUX               | 16984     | 16984     
+  F8MUX               | 4590      | 4590      
+  GCLK                | 10        | 10        
+  IOA                 | 6         | 6         
+  IOB                 | 30        | 30        
+  IPPIN               | 7691      | 7691      
+  LUT                 | 175813    | 49316     
+  RAMA                | 710       | 710       
+  SEQ                 | 276138    | 0         
+  ------------------------------------------
+
+  Number of nets: 485674
+  Number of clock nets: 80
+  ------------------------------------------
+  Group                 | Count   
+  ------------------------------------------
+  grp1: < 2 pins        | 0         
+  grp2: 2 pins          | 398203    
+  grp3: 3~10 pins       | 67320     
+  grp4: 11~50 pins      | 18593     
+  grp5: 51~100 pins     | 1096      
+  grp6: 101~1000 pins   | 457       
+  grp7: >1000 pins      | 5         
+  ------------------------------------------
+
+  163635 out of 485674 are intra-tile nets.
+  140942 out of 2013464 are timing critical pins.
+
+read_output /home/public/Test/Result/case_10.nodes.out
+
+  Instance Statistics:
+  -----------------------------------------------
+  Category | Count     | Re-placed   | %Re-placed 
+  -----------------------------------------------
+  Total    | 486522    | -           | -          
+  Fixed    | 83887     | 0           | 0.0      % 
+  Movable  | 402635    | 0           | 0.0      % 
+  -----------------------------------------------
+  Successfully read output file.
+
+legal_check
+  1.1 Check instance location and tile capacity.
+        Baseline placement passed capacity check.
+        Optimized placement passed capacity check.
+  1.2 Check control set constraint.
+        Baseline placement:
+          Checked control set on 30840 tiles.
+          Control Set Statistics(tile count v.s number of control nets):
+          ---------------------------------------
+          |       |  0  |  1  |  2  |  3  |  4  |
+          ---------------------------------------
+          | Clock |646  |29276|918  |0    |0    |
+          | Reset |15419|14546|875  |0    |0    |
+          | CE    |16596|9316 |4928 |0    |0    |
+          ---------------------------------------
+        Optimized placement:
+          Checked control set on 30840 tiles.
+          Control Set Statistics(tile count v.s number of control nets):
+          ---------------------------------------
+          |       |  0  |  1  |  2  |  3  |  4  |
+          ---------------------------------------
+          | Clock |646  |29276|918  |0    |0    |
+          | Reset |15419|14546|875  |0    |0    |
+          | CE    |16596|9316 |4928 |0    |0    |
+          ---------------------------------------
+  1.3 Check clock region constraint.
+        Baseline placement:
+          | 6 | 2 | 1 | 1 | 2 | 
+          | 6 | 5 | 2 | 1 | 3 | 
+          | 4 | 4 | 4 | 4 | 5 | 
+          | 6 | 5 | 5 | 3 | 4 | 
+          | 11| 5 | 7 | 8 | 4 | 
+          All clock regions passed legal check.
+        Optimized placement:
+          | 6 | 2 | 1 | 1 | 2 | 
+          | 6 | 5 | 2 | 1 | 3 | 
+          | 4 | 4 | 4 | 4 | 5 | 
+          | 6 | 5 | 5 | 3 | 4 | 
+          | 11| 5 | 7 | 8 | 4 | 
+          All clock regions passed legal check.
+  Legalization check passed.
+
+report_wirelength
+  Baseline wirelength: total = 2931952; crit = 669968 (22.85%)
+  Optimized wirelength: total  = 2931952; crit = 669968 (22.85%)
+
+report_pin_density
+  Baseline: 
+    Checked pin density on 30413 tiles; top 5% count = 1520 tiles.
+    List of Top-10 Congested Tiles
+    ------------------------------------------
+    Location | Input  | Output | Pin Density %
+    X72Y206  | 31/112  | 32/32  | 43.75%
+    X55Y32   | 33/112  | 29/32  | 43.06%
+    X23Y140  | 38/112  | 24/32  | 43.06%
+    X138Y178 | 33/112  | 28/32  | 42.36%
+    X137Y165 | 29/112  | 32/32  | 42.36%
+    X97Y6    | 32/112  | 29/32  | 42.36%
+    X56Y99   | 30/112  | 31/32  | 42.36%
+    X20Y170  | 31/112  | 30/32  | 42.36%
+    X20Y245  | 40/112  | 20/32  | 41.67%
+    ...
+    ------------------------------------------
+    Baseline top 5% congested tiles (1520 tiles) avg. pin density: 33.22%
+
+  Optimized: 
+    Checked pin density on 30413 tiles.
+    List of Top-10 Congested Tiles
+    ------------------------------------------
+    Location | Input  | Output | Pin Density %
+    X72Y206  | 31/112  | 32/32  | 43.75%
+    X55Y32   | 33/112  | 29/32  | 43.06%
+    X23Y140  | 38/112  | 24/32  | 43.06%
+    X138Y178 | 33/112  | 28/32  | 42.36%
+    X137Y165 | 29/112  | 32/32  | 42.36%
+    X97Y6    | 32/112  | 29/32  | 42.36%
+    X56Y99   | 30/112  | 31/32  | 42.36%
+    X20Y170  | 31/112  | 30/32  | 42.36%
+    X20Y245  | 40/112  | 20/32  | 41.67%
+    ...
+    ------------------------------------------
+    Optimized top 5% congested tiles(1520 tiles) avg. pin density: 33.22%
+
+
+exit
+Main program result: true

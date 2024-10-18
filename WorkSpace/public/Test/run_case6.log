@@ -1,0 +1,157 @@
+Track-8 Checker V0.4
+
+read_arch /home/public/Arch/fpga.lib /home/public/Arch/fpga.scl /home/public/Arch/fpga.clk
+  Successfully read architecture files.
+
+report_arch
+  Number of columns: 150
+  Number of rows: 300
+  Number of clock regions: 25
+
+  Tile Count by Type:
+  ------------------------------------------
+  Type                | Count
+  ------------------------------------------
+  GCLK                | 5
+  IOA                 | 42
+  IOB                 | 112
+  RAMB                | 120
+  RAMA                | 1200
+  DSP                 | 1800
+  IPPIN               | 2700
+  PLB                 | 30840
+  ------------------------------------------
+
+read_design /home/public/Benchmark/public_release/case_6.nodes /home/public/Benchmark/public_release/case_6.nets /home/public/Benchmark/public_release/case_6.timing
+  Successfully read design files.
+
+report_design
+  Number of instances: 247068
+  ------------------------------------------
+  Type                | Total     | Fixed     
+  ------------------------------------------
+  CARRY4              | 76        | 76        
+  F7MUX               | 3840      | 3840      
+  F8MUX               | 1920      | 1920      
+  GCLK                | 3         | 3         
+  IOA                 | 10        | 10        
+  IPPIN               | 24733     | 24733     
+  LUT                 | 99075     | 41045     
+  SEQ                 | 117411    | 0         
+  ------------------------------------------
+
+  Number of nets: 230610
+  Number of clock nets: 47
+  ------------------------------------------
+  Group                 | Count   
+  ------------------------------------------
+  grp1: < 2 pins        | 0         
+  grp2: 2 pins          | 181091    
+  grp3: 3~10 pins       | 37810     
+  grp4: 11~50 pins      | 10499     
+  grp5: 51~100 pins     | 796       
+  grp6: 101~1000 pins   | 408       
+  grp7: >1000 pins      | 6         
+  ------------------------------------------
+
+  43931 out of 230610 are intra-tile nets.
+  78478 out of 1121125 are timing critical pins.
+
+read_output /home/public/Test/Result/case_6.nodes.out
+
+  Instance Statistics:
+  -----------------------------------------------
+  Category | Count     | Re-placed   | %Re-placed 
+  -----------------------------------------------
+  Total    | 247068    | -           | -          
+  Fixed    | 71627     | 0           | 0.0      % 
+  Movable  | 175441    | 0           | 0.0      % 
+  -----------------------------------------------
+  Successfully read output file.
+
+legal_check
+  1.1 Check instance location and tile capacity.
+        Baseline placement passed capacity check.
+        Optimized placement passed capacity check.
+  1.2 Check control set constraint.
+        Baseline placement:
+          Checked control set on 30840 tiles.
+          Control Set Statistics(tile count v.s number of control nets):
+          ---------------------------------------
+          |       |  0  |  1  |  2  |  3  |  4  |
+          ---------------------------------------
+          | Clock |7894 |22260|686  |0    |0    |
+          | Reset |10830|20003|7    |0    |0    |
+          | CE    |11651|9706 |9483 |0    |0    |
+          ---------------------------------------
+        Optimized placement:
+          Checked control set on 30840 tiles.
+          Control Set Statistics(tile count v.s number of control nets):
+          ---------------------------------------
+          |       |  0  |  1  |  2  |  3  |  4  |
+          ---------------------------------------
+          | Clock |7894 |22260|686  |0    |0    |
+          | Reset |10830|20003|7    |0    |0    |
+          | CE    |11651|9706 |9483 |0    |0    |
+          ---------------------------------------
+  1.3 Check clock region constraint.
+        Baseline placement:
+          | 3 | 1 | 2 | 5 | 9 | 
+          | 3 | 1 | 2 | 6 | 18| 
+          | 1 | 1 | 1 | 1 | 10| 
+          | 1 | 1 | 1 | 4 | 10| 
+          | 3 | 1 | 1 | 4 | 7 | 
+          All clock regions passed legal check.
+        Optimized placement:
+          | 3 | 1 | 2 | 5 | 9 | 
+          | 3 | 1 | 2 | 6 | 18| 
+          | 1 | 1 | 1 | 1 | 10| 
+          | 1 | 1 | 1 | 4 | 10| 
+          | 3 | 1 | 1 | 4 | 7 | 
+          All clock regions passed legal check.
+  Legalization check passed.
+
+report_wirelength
+  Baseline wirelength: total = 1841739; crit = 526210 (28.57%)
+  Optimized wirelength: total  = 1841739; crit = 526210 (28.57%)
+
+report_pin_density
+  Baseline: 
+    Checked pin density on 25259 tiles; top 5% count = 1262 tiles.
+    List of Top-10 Congested Tiles
+    ------------------------------------------
+    Location | Input  | Output | Pin Density %
+    X140Y70  | 36/112  | 25/32  | 42.36%
+    X14Y139  | 26/112  | 31/32  | 39.58%
+    X11Y108  | 26/112  | 31/32  | 39.58%
+    X143Y39  | 36/112  | 19/32  | 38.19%
+    X143Y40  | 36/112  | 18/32  | 37.50%
+    X140Y52  | 35/112  | 19/32  | 37.50%
+    X140Y40  | 36/112  | 18/32  | 37.50%
+    X50Y18   | 24/112  | 30/32  | 37.50%
+    X8Y247   | 28/112  | 26/32  | 37.50%
+    ...
+    ------------------------------------------
+    Baseline top 5% congested tiles (1262 tiles) avg. pin density: 27.68%
+
+  Optimized: 
+    Checked pin density on 25259 tiles.
+    List of Top-10 Congested Tiles
+    ------------------------------------------
+    Location | Input  | Output | Pin Density %
+    X140Y70  | 36/112  | 25/32  | 42.36%
+    X14Y139  | 26/112  | 31/32  | 39.58%
+    X11Y108  | 26/112  | 31/32  | 39.58%
+    X143Y39  | 36/112  | 19/32  | 38.19%
+    X143Y40  | 36/112  | 18/32  | 37.50%
+    X140Y52  | 35/112  | 19/32  | 37.50%
+    X140Y40  | 36/112  | 18/32  | 37.50%
+    X50Y18   | 24/112  | 30/32  | 37.50%
+    X8Y247   | 28/112  | 26/32  | 37.50%
+    ...
+    ------------------------------------------
+    Optimized top 5% congested tiles(1262 tiles) avg. pin density: 27.68%
+
+
+exit
+Main program result: true

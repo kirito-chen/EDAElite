@@ -1,0 +1,160 @@
+Track-8 Checker V0.4
+
+read_arch /home/public/Arch/fpga.lib /home/public/Arch/fpga.scl /home/public/Arch/fpga.clk
+  Successfully read architecture files.
+
+report_arch
+  Number of columns: 150
+  Number of rows: 300
+  Number of clock regions: 25
+
+  Tile Count by Type:
+  ------------------------------------------
+  Type                | Count
+  ------------------------------------------
+  GCLK                | 5
+  IOA                 | 42
+  IOB                 | 112
+  RAMB                | 120
+  RAMA                | 1200
+  DSP                 | 1800
+  IPPIN               | 2700
+  PLB                 | 30840
+  ------------------------------------------
+
+read_design /home/public/Benchmark/public_release/case_7.nodes /home/public/Benchmark/public_release/case_7.nets /home/public/Benchmark/public_release/case_7.timing
+  Successfully read design files.
+
+report_design
+  Number of instances: 294634
+  ------------------------------------------
+  Type                | Total     | Fixed     
+  ------------------------------------------
+  CARRY4              | 2688      | 2688      
+  DRAM                | 678       | 678       
+  DSP                 | 480       | 480       
+  F7MUX               | 2944      | 2944      
+  GCLK                | 70        | 70        
+  IOA                 | 9         | 9         
+  IOB                 | 25        | 25        
+  IPPIN               | 9664      | 9664      
+  LUT                 | 117202    | 51461     
+  RAMA                | 320       | 320       
+  SEQ                 | 160554    | 0         
+  ------------------------------------------
+
+  Number of nets: 282928
+  Number of clock nets: 101
+  ------------------------------------------
+  Group                 | Count   
+  ------------------------------------------
+  grp1: < 2 pins        | 0         
+  grp2: 2 pins          | 203492    
+  grp3: 3~10 pins       | 71127     
+  grp4: 11~50 pins      | 7878      
+  grp5: 51~100 pins     | 361       
+  grp6: 101~1000 pins   | 7         
+  grp7: >1000 pins      | 63        
+  ------------------------------------------
+
+  96406 out of 282928 are intra-tile nets.
+  90950 out of 1299295 are timing critical pins.
+
+read_output /home/public/Test/Result/case_7.nodes.out
+
+  Instance Statistics:
+  -----------------------------------------------
+  Category | Count     | Re-placed   | %Re-placed 
+  -----------------------------------------------
+  Total    | 294634    | -           | -          
+  Fixed    | 68339     | 0           | 0.0      % 
+  Movable  | 226295    | 0           | 0.0      % 
+  -----------------------------------------------
+  Successfully read output file.
+
+legal_check
+  1.1 Check instance location and tile capacity.
+        Baseline placement passed capacity check.
+        Optimized placement passed capacity check.
+  1.2 Check control set constraint.
+        Baseline placement:
+          Checked control set on 30840 tiles.
+          Control Set Statistics(tile count v.s number of control nets):
+          ---------------------------------------
+          |       |  0  |  1  |  2  |  3  |  4  |
+          ---------------------------------------
+          | Clock |6505 |22393|1942 |0    |0    |
+          | Reset |9777 |20463|600  |0    |0    |
+          | CE    |20606|6319 |3915 |0    |0    |
+          ---------------------------------------
+        Optimized placement:
+          Checked control set on 30840 tiles.
+          Control Set Statistics(tile count v.s number of control nets):
+          ---------------------------------------
+          |       |  0  |  1  |  2  |  3  |  4  |
+          ---------------------------------------
+          | Clock |6505 |22393|1942 |0    |0    |
+          | Reset |9777 |20463|600  |0    |0    |
+          | CE    |20606|6319 |3915 |0    |0    |
+          ---------------------------------------
+  1.3 Check clock region constraint.
+        Baseline placement:
+          | 3 | 1 | 1 | 6 | 13| 
+          | 12| 1 | 6 | 13| 22| 
+          | 19| 1 | 4 | 16| 21| 
+          | 17| 1 | 9 | 19| 26| 
+          | 23| 2 | 12| 19| 23| 
+          All clock regions passed legal check.
+        Optimized placement:
+          | 3 | 1 | 1 | 6 | 13| 
+          | 12| 1 | 6 | 13| 22| 
+          | 19| 1 | 4 | 16| 21| 
+          | 17| 1 | 9 | 19| 26| 
+          | 23| 2 | 12| 19| 23| 
+          All clock regions passed legal check.
+  Legalization check passed.
+
+report_wirelength
+  Baseline wirelength: total = 2159585; crit = 780093 (36.12%)
+  Optimized wirelength: total  = 2159585; crit = 780093 (36.12%)
+
+report_pin_density
+  Baseline: 
+    Checked pin density on 25573 tiles; top 5% count = 1278 tiles.
+    List of Top-10 Congested Tiles
+    ------------------------------------------
+    Location | Input  | Output | Pin Density %
+    X137Y177 | 52/112  | 15/32  | 46.53%
+    X130Y173 | 52/112  | 15/32  | 46.53%
+    X130Y172 | 52/112  | 15/32  | 46.53%
+    X140Y91  | 51/112  | 15/32  | 45.83%
+    X140Y90  | 50/112  | 15/32  | 45.14%
+    X134Y85  | 50/112  | 15/32  | 45.14%
+    X140Y92  | 49/112  | 15/32  | 44.44%
+    X134Y70  | 49/112  | 15/32  | 44.44%
+    X134Y69  | 49/112  | 15/32  | 44.44%
+    ...
+    ------------------------------------------
+    Baseline top 5% congested tiles (1278 tiles) avg. pin density: 27.40%
+
+  Optimized: 
+    Checked pin density on 25573 tiles.
+    List of Top-10 Congested Tiles
+    ------------------------------------------
+    Location | Input  | Output | Pin Density %
+    X137Y177 | 52/112  | 15/32  | 46.53%
+    X130Y173 | 52/112  | 15/32  | 46.53%
+    X130Y172 | 52/112  | 15/32  | 46.53%
+    X140Y91  | 51/112  | 15/32  | 45.83%
+    X140Y90  | 50/112  | 15/32  | 45.14%
+    X134Y85  | 50/112  | 15/32  | 45.14%
+    X140Y92  | 49/112  | 15/32  | 44.44%
+    X134Y70  | 49/112  | 15/32  | 44.44%
+    X134Y69  | 49/112  | 15/32  | 44.44%
+    ...
+    ------------------------------------------
+    Optimized top 5% congested tiles(1278 tiles) avg. pin density: 27.40%
+
+
+exit
+Main program result: true

@@ -1,0 +1,19 @@
+2024/09/11  v0.1 Arch
+            v0.1 Benchmark 
+			Initial version uploaded 
+
+2024/09/25  v0.1 Checker            
+            v0.1 FLUTE_LIB 
+                        Initial version of checker program
+            v0.2 Arch
+                        .scl file updated IPPIN site location  
+
+2024/09/25  v0.2 Checker Update
+						1) src code can now be obtained through git clone https://github.com/celebesX/eda_2024_track8_checker.git
+						2) fixed PLB control set check, check clock/ce/sr by bank
+						3) updated pin density calculation, consider nets that are driving DFF control pins
+						
+2024/09/29  v0.3 Checker Update
+						1) All report commands report both baseline and optimized design
+						2) Check tile empty api to skip IPPIN
+						3) Wirelength calculation to merge instance within same tile
