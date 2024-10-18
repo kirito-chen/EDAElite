@@ -1,0 +1,32 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "C/C++ Runner: Debug",
+      "type": "cppdbg",
+      "request": "launch",
+      "args": [
+        "/home/pc/aibot/EDAEliteChallenge/eda_2024_track8_checker/demo.run"
+      ],
+      "stopAtEntry": false,
+      "externalConsole": false,
+      "cwd": "/home/pc/aibot/EDAEliteChallenge/eda_2024_track8_checker",
+      "program": "/home/pc/aibot/EDAEliteChallenge/eda_2024_track8_checker/build/checker",
+      "MIMode": "gdb",
+      "miDebuggerPath": "gdb",
+      "preLaunchTask": "build",
+      "setupCommands": [
+        {
+            "description": "Test",
+            "text": "python import sys;sys.path.insert(0, '/usr/share/gcc-8/python');from libstdcxx.v6.printers import register_libstdcxx_printers;register_libstdcxx_printers(None)",
+            "ignoreFailures": false
+        },
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ]
+    }
+  ]
+}
