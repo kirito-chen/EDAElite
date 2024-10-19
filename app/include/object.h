@@ -294,6 +294,9 @@ class Net {
     bool clock; // 声明 clock 成员变量    
     Pin* inpin;
     std::list<Pin*> outputPins;
+    int critHPWL; //当前net的关键路径半周线长
+    int HPWL; //当前net的总半周线长
+
 
 public:
     Net(int netID) : id(netID), clock(false), inpin(nullptr) {} // 默认构造函数
@@ -317,13 +320,20 @@ public:
     std::list<Pin*> getOutputPins() const { return outputPins; }
     void addOutputPin(Pin* pin) { outputPins.push_back(pin); }
 
+    int setNetHPWL(bool isBaseline); // cjq 设置每个net的半周线长
+    int getCritHPWL(){ return critHPWL;}
+    int getHPWL(){ return HPWL; }
+
     int getNumPins();
 
     bool addConnection(std::string conn);
 
-    int getCritWireLength(bool isBaseline);    
-    void getMergedNonCritPinLocs(bool isBaseline, std::vector<int>& xCoords, std::vector<int>& yCoords);  
-    int getNonCritWireLength(bool isBaseline);       
+    int getCritWireLength(bool isBaseline);
+    int getCritHPWL(bool isBaseline);    // cjq 增加半周线长的计算方式   
+    
+    void getMergedNonCritPinLocs(bool isBaseline, std::vector<int>& xCoords, std::vector<int>& yCoords);  //返回不是关键时序上的节点
+    int getNonCritWireLength(bool isBaseline);  
+    int getNonCritHPWL(bool isBaseline);     // cjq 增加半周线长的计算方式   
 
     // report util   
     bool reportNet();

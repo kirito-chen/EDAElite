@@ -1199,7 +1199,7 @@ int Net::getCritWireLength(bool isBaseline)
     driverLoc = driverPin->getInstanceOwner()->getLocation();
   }
 
-  std::set<std::pair<int, int>> mergedPinLocs; // merge identical pin locations
+  std::set<std::pair<int, int>> mergedPinLocs; // merge identical pin locations  //保存x与y的坐标
   for (const auto *outpin : getOutputPins())
   {
     if (!outpin->getTimingCritical())
@@ -1226,6 +1226,141 @@ int Net::getCritWireLength(bool isBaseline)
 
   return wirelength;
 }
+
+int Net::setNetHPWL(bool isBaseline) //cjq modify
+{
+  int wirelength = 0;
+  // 计算关键路径半周线长
+  const Pin *driverPin = getInpin();
+  if (!driverPin)
+  {
+    return 0; // Return 0 if there's no driver pin
+  }
+
+  std::tuple<int, int, int> driverLoc;
+  if (isBaseline)
+  {
+    driverLoc = driverPin->getInstanceOwner()->getBaseLocation();
+  }
+  else
+  {
+    driverLoc = driverPin->getInstanceOwner()->getLocation();
+  }
+
+  std::set<std::pair<int, int>> mergedPinLocs; // merge identical pin locations  //保存x与y的坐标
+  for (const auto *outpin : getOutputPins())
+  {
+    if (!outpin->getTimingCritical())
+    {
+      continue;
+    }
+    std::tuple<int, int, int> sinkLoc;
+    if (isBaseline)
+    {
+      sinkLoc = outpin->getInstanceOwner()->getBaseLocation();
+    }
+    else
+    {
+      sinkLoc = outpin->getInstanceOwner()->getLocation();
+    }
+    mergedPinLocs.insert(std::make_pair(std::get<0>(sinkLoc), std::get<1>(sinkLoc)));
+  }
+  if (!mergedPinLocs.empty()){
+    // 初始化
+    int xMax = std::get<0>(driverLoc), xMin = std::get<0>(driverLoc); 
+    int yMax = std::get<1>(driverLoc), yMin =  std::get<1>(driverLoc);
+    for (auto loc : mergedPinLocs)
+    {
+      int xLoc = std::get<0>(loc);
+      int yLoc = std::get<1>(loc);
+      xMax = std::max(xLoc, xMax);
+      xMin = std::min(xLoc, xMin);
+      yMax = std::max(yLoc, yMax);
+      yMin = std::min(yLoc, yMin);
+    }
+    wirelength += xMax - xMin + yMax - yMin;
+  }
+  critHPWL = wirelength;
+
+  // 计算不是关键路径上的半周线长
+  std::vector<int> xCoords;
+  std::vector<int> yCoords;
+  getMergedNonCritPinLocs(isBaseline, xCoords, yCoords);
+
+  if (xCoords.size() > 1)
+  {
+    //初始化
+    int xMax, xMin, yMax, yMin;
+    xMax = xMin = xCoords[0];
+    yMax = yMin = yCoords[0];
+    for(int i = 0; i < xCoords.size(); i++){
+      xMax = std::max(xMax, xCoords[i]);
+      xMin = std::min(xMin, xCoords[i]);
+      yMax = std::max(yMax, yCoords[i]);
+      yMin = std::min(yMin, yCoords[i]);
+    }
+    wirelength += xMax - xMin + yMax - yMin;
+  }
+  HPWL = wirelength;
+}
+
+int Net::getCritHPWL(bool isBaseline)  //cjq modify
+{
+  int wirelength = 0;
+  const Pin *driverPin = getInpin();
+  if (!driverPin)
+  {
+    return 0; // Return 0 if there's no driver pin
+  }
+
+  std::tuple<int, int, int> driverLoc;
+  if (isBaseline)
+  {
+    driverLoc = driverPin->getInstanceOwner()->getBaseLocation();
+  }
+  else
+  {
+    driverLoc = driverPin->getInstanceOwner()->getLocation();
+  }
+
+  std::set<std::pair<int, int>> mergedPinLocs; // merge identical pin locations  //保存x与y的坐标
+  for (const auto *outpin : getOutputPins())
+  {
+    if (!outpin->getTimingCritical())
+    {
+      continue;
+    }
+    std::tuple<int, int, int> sinkLoc;
+    if (isBaseline)
+    {
+      sinkLoc = outpin->getInstanceOwner()->getBaseLocation();
+    }
+    else
+    {
+      sinkLoc = outpin->getInstanceOwner()->getLocation();
+    }
+    mergedPinLocs.insert(std::make_pair(std::get<0>(sinkLoc), std::get<1>(sinkLoc)));
+  }
+  if (!mergedPinLocs.empty()){
+    // 初始化
+    int xMax = std::get<0>(driverLoc), xMin = std::get<0>(driverLoc); 
+    int yMax = std::get<1>(driverLoc), yMin =  std::get<1>(driverLoc);
+    for (auto loc : mergedPinLocs)
+    {
+      int xLoc = std::get<0>(loc);
+      int yLoc = std::get<1>(loc);
+      xMax = std::max(xLoc, xMax);
+      xMin = std::min(xLoc, xMin);
+      yMax = std::max(yLoc, yMax);
+      yMin = std::min(yLoc, yMin);
+    }
+    wirelength += xMax - xMin + yMax - yMin;
+  }
+  
+
+  return wirelength;
+}
+
 
 void Net::getMergedNonCritPinLocs(bool isBaseline, std::vector<int> &xCoords, std::vector<int> &yCoords)
 {
@@ -1295,6 +1430,36 @@ int Net::getNonCritWireLength(bool isBaseline)
   {
     return 0;
   }
+}
+
+int Net::getNonCritHPWL(bool isBaseline)  // cjq modify
+{
+  int wirelength = 0;
+  const Pin *driverPin = getInpin();
+  if (!driverPin)
+  {
+    return 0; // Return 0 if there's no driver pin
+  }
+
+  std::vector<int> xCoords;
+  std::vector<int> yCoords;
+  getMergedNonCritPinLocs(isBaseline, xCoords, yCoords);
+
+  if (xCoords.size() > 1)
+  {
+    //初始化
+    int xMax, xMin, yMax, yMin;
+    xMax = xMin = xCoords[0];
+    yMax = yMin = yCoords[0];
+    for(int i = 0; i < xCoords.size(); i++){
+      xMax = std::max(xMax, xCoords[i]);
+      xMin = std::min(xMin, xCoords[i]);
+      yMax = std::max(yMax, yCoords[i]);
+      yMin = std::min(yMin, yCoords[i]);
+    }
+    wirelength += xMax - xMin + yMax - yMin;
+  }
+  return wirelength;
 }
 
 bool Net::reportNet()

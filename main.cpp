@@ -8,6 +8,7 @@
 #include "global.h"
 #include "rsmt.h"
 #include "method.h"
+#include "test.h"
 
 int main(int argc, char *argv[])
 {
@@ -232,7 +233,8 @@ int main(int argc, char *argv[])
         }
         std::cout << std::endl;
     }
-    calculateTileRemain();  // 测试
+    // calculateTileRemain();  // 测试
+    testHPWL();
 
     
     // free memory before exit
