@@ -39,6 +39,7 @@ enum PinProp {
 };
 
 class Instance;
+class Net;
 class Slot {
     private:
         // normally each slot is holding 1 instance
@@ -249,6 +250,8 @@ class Instance {
     std::vector<Pin*> inpins;  
     std::vector<Pin*> outpins;
 
+    int allRelatedNetHPWL;      // 存取与inst相关的所有net的HPWL之和
+
 public:
     Instance(); 
     ~Instance();
@@ -285,6 +288,15 @@ public:
     int getNumOutpins() const { return outpins.size(); }
     std::vector<Pin*> getOutpins() const { return outpins; }
     Pin* getOutpin(int idx) const { return outpins[idx]; }
+
+    // wbx—2024年10月19日
+    std::set<Net *> getRelatedNets() const;
+    void calculateAllRelatedNetHPWL(bool isBaseline);
+
+    // Getter and setter for HPWL
+    int getAllRelatedNetHPWL() const { return allRelatedNetHPWL; }
+
+
     //void connectOutpin(int netID, int idx) { outpins[idx].setNetID(netID); }
 
 };

@@ -894,7 +894,7 @@ void Tile::getRemainingPLBResources(bool isBaseline)
           for (int instID : instances)
           {
             Instance *inst = glbInstMap.find(instID)->second; // 获取实例对象
-            std::set<int> temp = getUsedPins(inst);                // 计算该实例实际使用的引脚数
+            std::set<int> temp = getUsedPins(inst);           // 计算该实例实际使用的引脚数
             totalUsedPins.insert(temp.begin(), temp.end());
           }
 
@@ -1045,6 +1045,52 @@ void Instance::createOutpins()
     outpins.push_back(pin);
   }
 }
+
+// 获取与实例相关的所有网络_wbx_2024年10月19日
+std::set<Net *> Instance::getRelatedNets() const
+{
+  std::set<Net *> relatedNets;
+
+  // 获取与输入引脚相关的网络
+  for (int i = 0; i < getNumInpins(); ++i)
+  {
+    Pin *inPin = getInpin(i);
+    int netID = inPin->getNetID();
+    if (netID != -1 && glbNetMap.find(netID) != glbNetMap.end())
+    {
+      relatedNets.insert(glbNetMap[netID]);
+    }
+  }
+
+  // 获取与输出引脚相关的网络
+  for (int i = 0; i < getNumOutpins(); ++i)
+  {
+    Pin *outPin = getOutpin(i);
+    int netID = outPin->getNetID();
+    if (netID != -1 && glbNetMap.find(netID) != glbNetMap.end())
+    {
+      relatedNets.insert(glbNetMap[netID]);
+    }
+  }
+
+  return relatedNets; // 返回与实例相关的所有网络
+}
+
+// 计算与实例相关的所有网络的HPWL之和，并存储到allRelatedNetHPWL
+void Instance::calculateAllRelatedNetHPWL(bool isBaseline)
+{
+  allRelatedNetHPWL = 0; // 初始化为0
+
+  std::set<Net *> relatedNets = getRelatedNets();
+
+  // 遍历每个相关的net，累加其HPWL
+  for (Net *net : relatedNets)
+  {
+    allRelatedNetHPWL += net->getCritHPWL(); // 累加net的CritHPWL
+    allRelatedNetHPWL += net->getHPWL(); // 累加net的HPWL
+  }
+}
+
 
 bool Net::isIntraTileNet(bool isBaseline)
 {
@@ -1227,7 +1273,7 @@ int Net::getCritWireLength(bool isBaseline)
   return wirelength;
 }
 
-int Net::setNetHPWL(bool isBaseline) //cjq modify
+int Net::setNetHPWL(bool isBaseline) // cjq modify
 {
   int wirelength = 0;
   // 计算关键路径半周线长
@@ -1265,10 +1311,11 @@ int Net::setNetHPWL(bool isBaseline) //cjq modify
     }
     mergedPinLocs.insert(std::make_pair(std::get<0>(sinkLoc), std::get<1>(sinkLoc)));
   }
-  if (!mergedPinLocs.empty()){
+  if (!mergedPinLocs.empty())
+  {
     // 初始化
-    int xMax = std::get<0>(driverLoc), xMin = std::get<0>(driverLoc); 
-    int yMax = std::get<1>(driverLoc), yMin =  std::get<1>(driverLoc);
+    int xMax = std::get<0>(driverLoc), xMin = std::get<0>(driverLoc);
+    int yMax = std::get<1>(driverLoc), yMin = std::get<1>(driverLoc);
     for (auto loc : mergedPinLocs)
     {
       int xLoc = std::get<0>(loc);
@@ -1289,11 +1336,12 @@ int Net::setNetHPWL(bool isBaseline) //cjq modify
 
   if (xCoords.size() > 1)
   {
-    //初始化
+    // 初始化
     int xMax, xMin, yMax, yMin;
     xMax = xMin = xCoords[0];
     yMax = yMin = yCoords[0];
-    for(int i = 0; i < xCoords.size(); i++){
+    for (int i = 0; i < xCoords.size(); i++)
+    {
       xMax = std::max(xMax, xCoords[i]);
       xMin = std::min(xMin, xCoords[i]);
       yMax = std::max(yMax, yCoords[i]);
@@ -1304,7 +1352,7 @@ int Net::setNetHPWL(bool isBaseline) //cjq modify
   HPWL = wirelength;
 }
 
-int Net::getCritHPWL(bool isBaseline)  //cjq modify
+int Net::getCritHPWL(bool isBaseline) // cjq modify
 {
   int wirelength = 0;
   const Pin *driverPin = getInpin();
@@ -1341,10 +1389,11 @@ int Net::getCritHPWL(bool isBaseline)  //cjq modify
     }
     mergedPinLocs.insert(std::make_pair(std::get<0>(sinkLoc), std::get<1>(sinkLoc)));
   }
-  if (!mergedPinLocs.empty()){
+  if (!mergedPinLocs.empty())
+  {
     // 初始化
-    int xMax = std::get<0>(driverLoc), xMin = std::get<0>(driverLoc); 
-    int yMax = std::get<1>(driverLoc), yMin =  std::get<1>(driverLoc);
+    int xMax = std::get<0>(driverLoc), xMin = std::get<0>(driverLoc);
+    int yMax = std::get<1>(driverLoc), yMin = std::get<1>(driverLoc);
     for (auto loc : mergedPinLocs)
     {
       int xLoc = std::get<0>(loc);
@@ -1356,11 +1405,9 @@ int Net::getCritHPWL(bool isBaseline)  //cjq modify
     }
     wirelength += xMax - xMin + yMax - yMin;
   }
-  
 
   return wirelength;
 }
-
 
 void Net::getMergedNonCritPinLocs(bool isBaseline, std::vector<int> &xCoords, std::vector<int> &yCoords)
 {
@@ -1432,7 +1479,7 @@ int Net::getNonCritWireLength(bool isBaseline)
   }
 }
 
-int Net::getNonCritHPWL(bool isBaseline)  // cjq modify
+int Net::getNonCritHPWL(bool isBaseline) // cjq modify
 {
   int wirelength = 0;
   const Pin *driverPin = getInpin();
@@ -1447,11 +1494,12 @@ int Net::getNonCritHPWL(bool isBaseline)  // cjq modify
 
   if (xCoords.size() > 1)
   {
-    //初始化
+    // 初始化
     int xMax, xMin, yMax, yMin;
     xMax = xMin = xCoords[0];
     yMax = yMin = yCoords[0];
-    for(int i = 0; i < xCoords.size(); i++){
+    for (int i = 0; i < xCoords.size(); i++)
+    {
       xMax = std::max(xMax, xCoords[i]);
       xMin = std::min(xMin, xCoords[i]);
       yMax = std::max(yMax, yCoords[i]);

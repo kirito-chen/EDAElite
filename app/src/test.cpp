@@ -23,7 +23,7 @@ int testHPWL()
   for (auto iter : glbNetMap)
   {
     Net *net = iter.second;
-    std::cout << "netID:" << net->getId() <<" CritHPWL:"<< net->getCritHPWL() <<" total HPWL:"<< net->getHPWL()<<std::endl;
+    // std::cout << "netID:" << net->getId() <<" CritHPWL:"<< net->getCritHPWL() <<" total HPWL:"<< net->getHPWL()<<std::endl;
   }
 
   return 0;

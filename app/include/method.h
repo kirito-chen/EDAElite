@@ -6,3 +6,4 @@
 #include "arch.h"
 
 void calculateTileRemain();
+void FM();

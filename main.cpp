@@ -233,9 +233,11 @@ int main(int argc, char *argv[])
         }
         std::cout << std::endl;
     }
-    // calculateTileRemain();  // 测试
-    testHPWL();
 
+    //-------------------测试---------------
+    testHPWL();
+    calculateTileRemain();  
+    FM();
     
     // free memory before exit
     for (auto &lib : glbLibMap)

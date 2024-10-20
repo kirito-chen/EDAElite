@@ -14,15 +14,25 @@ void calculateTileRemain()
         {
             Tile *tile = chip.getTile(i, j);
             tile->getRemainingPLBResources(true);
-            // if (i == 94 && j == 128)
-            // {
-            //     std::cout << "-" << std::endl;
-            //     Tile *tile = chip.getTile(i, j);
-            //     tile->getRemainingPLBResources(true);
-            //     // 输出剩余的 LUT 和 DFF 资源数量
-            //     std::cout << "Remaining LUTs: " << std::endl;
-            //     // std::cout << "Remaining DFFs: " << remainingResources.second << std::endl;
-            // }
         }
     }
+}
+
+void FM()
+{
+    std::cout << "--------FM--------" << std::endl;
+    for (auto &instPair : glbInstMap)
+    {
+        // instPair 是一个 std::pair<int, Instance*>
+        Instance *inst = instPair.second; // 获取实例指针
+
+        // 调用函数计算并更新该实例的HPWL
+        bool isBaseline = true; // 可以根据需求选择是否计算 baseline 状态
+        inst->calculateAllRelatedNetHPWL(isBaseline);
+
+        // 输出更新后的HPWL值
+        std::cout << "Instance ID: " << instPair.first
+                  << " has updated HPWL = " << inst->getAllRelatedNetHPWL() << std::endl;
+    }
+    std::cout << "--------FM--------" << std::endl;
 }
