@@ -235,7 +235,8 @@ int main(int argc, char *argv[])
     }
 
     //-------------------测试---------------
-    testHPWL();
+    // testHPWL();
+    
     calculateTileRemain();  
     FM();
     

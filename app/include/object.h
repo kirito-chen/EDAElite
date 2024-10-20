@@ -251,6 +251,7 @@ class Instance {
     std::vector<Pin*> outpins;
 
     int allRelatedNetHPWL;      // 存取与inst相关的所有net的HPWL之和
+    int allRelatedNetHPWLAver;  //cjq modify 24.10.20 平均HPWL
 
 public:
     Instance(); 
@@ -295,6 +296,8 @@ public:
 
     // Getter and setter for HPWL
     int getAllRelatedNetHPWL() const { return allRelatedNetHPWL; }
+    int getAllRelatedNetHPWLAver() const { return allRelatedNetHPWLAver; }
+
 
 
     //void connectOutpin(int netID, int idx) { outpins[idx].setNetID(netID); }

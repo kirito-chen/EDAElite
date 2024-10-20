@@ -1089,6 +1089,11 @@ void Instance::calculateAllRelatedNetHPWL(bool isBaseline)
     allRelatedNetHPWL += net->getCritHPWL(); // 累加net的CritHPWL
     allRelatedNetHPWL += net->getHPWL(); // 累加net的HPWL
   }
+  // cjq modify 24.10.20 平均
+  if (relatedNets.size() > 0)
+    allRelatedNetHPWLAver = allRelatedNetHPWL / relatedNets.size();
+  else
+    allRelatedNetHPWLAver = 0;
 }
 
 
