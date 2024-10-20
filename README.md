@@ -1,6 +1,8 @@
 # eda_2024_track8_checker
 # EDA Contest 2024 Anlogic Checker
 
+##############
+
 1）How to compile the program: 
    cd <path_of_the_src_code>
    make 
