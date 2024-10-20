@@ -977,6 +977,7 @@ Instance::Instance()
   fixed = false;
   setLocation(std::make_tuple(-1, -1, -1));
   setBaseLocation(std::make_tuple(-1, -1, -1));
+  movableRegion.assign(4, -1);
 }
 
 bool Instance::isPlaced()
@@ -1077,6 +1078,7 @@ std::set<Net *> Instance::getRelatedNets() const
 }
 
 // 计算与实例相关的所有网络的HPWL之和，并存储到allRelatedNetHPWL
+// 得添加
 void Instance::calculateAllRelatedNetHPWL(bool isBaseline)
 {
   allRelatedNetHPWL = 0; // 初始化为0
@@ -1087,7 +1089,7 @@ void Instance::calculateAllRelatedNetHPWL(bool isBaseline)
   for (Net *net : relatedNets)
   {
     allRelatedNetHPWL += net->getCritHPWL(); // 累加net的CritHPWL
-    allRelatedNetHPWL += net->getHPWL(); // 累加net的HPWL
+    allRelatedNetHPWL += net->getHPWL();     // 累加net的HPWL
   }
   // cjq modify 24.10.20 平均
   if (relatedNets.size() > 0)
@@ -1096,6 +1098,37 @@ void Instance::calculateAllRelatedNetHPWL(bool isBaseline)
     allRelatedNetHPWLAver = 0;
 }
 
+// 计算instance的可移动区域
+void Instance::generateMovableRegion()
+{
+  if (!fixed)
+  {
+    // if(instanceName == "inst_335"){
+    //   std::cout<<" ";
+    // }
+    // std::cout << "生成可移动区域" << std::endl;
+    // 初始化可移动区域为一个极大矩形
+    int xlb = std::numeric_limits<int>::min();
+    int ylb = std::numeric_limits<int>::min();
+    int xrt = std::numeric_limits<int>::max();
+    int yrt = std::numeric_limits<int>::max();
+
+    // 获取与当前实例相关的所有 Net
+    std::set<Net *> relatedNets = getRelatedNets();
+
+    // 遍历所有相关 net，更新可移动区域
+    for (Net *net : relatedNets)
+    {
+      std::vector<int> netArea = net->getBoundingBox();
+      xlb = std::max(xlb, netArea[0]); // net 的左下角 x 坐标
+      ylb = std::max(ylb, netArea[1]); // net 的左下角 y 坐标
+      xrt = std::min(xrt, netArea[2]); // net 的右上角 x 坐标
+      yrt = std::min(yrt, netArea[3]); // net 的右上角 y 坐标
+    }
+    // 设置该实例的可移动区域
+    movableRegion = {xlb, ylb, xrt, yrt};
+  }
+}
 
 bool Net::isIntraTileNet(bool isBaseline)
 {
@@ -1278,7 +1311,7 @@ int Net::getCritWireLength(bool isBaseline)
   return wirelength;
 }
 
-int Net::setNetHPWL(bool isBaseline) // cjq modify
+int Net::setNetHPWL(bool isBaseline) // cjq modify, netArea最小外包矩形也在此处计算，包含所有的inst
 {
   int wirelength = 0;
   // 计算关键路径半周线长
@@ -1339,7 +1372,7 @@ int Net::setNetHPWL(bool isBaseline) // cjq modify
   std::vector<int> yCoords;
   getMergedNonCritPinLocs(isBaseline, xCoords, yCoords);
 
-  if (xCoords.size() > 1)
+  if (xCoords.size() > 0)
   {
     // 初始化
     int xMax, xMin, yMax, yMin;
@@ -1352,7 +1385,24 @@ int Net::setNetHPWL(bool isBaseline) // cjq modify
       yMax = std::max(yMax, yCoords[i]);
       yMin = std::min(yMin, yCoords[i]);
     }
+
     wirelength += xMax - xMin + yMax - yMin;
+    if (!mergedPinLocs.empty())
+    {
+      for (auto loc : mergedPinLocs)
+      {
+        int xLoc = std::get<0>(loc);
+        int yLoc = std::get<1>(loc);
+        xMax = std::max(xMax, xLoc);
+        xMin = std::min(xMin, xLoc);
+        yMax = std::max(yMax, yLoc);
+        yMin = std::min(yMin, yLoc);
+      }
+    }
+    netArea[0] = xMin;
+    netArea[1] = yMin;
+    netArea[2] = xMax;
+    netArea[3] = yMax;
   }
   HPWL = wirelength;
 }

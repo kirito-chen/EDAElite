@@ -6,6 +6,8 @@
 #include <map>    // 包含对 std::map 的支持
 #include <vector> // 包含对 std::vector 的支持
 #include <set>    // 包含对 std::set 的支持
+#include <limits> 
+#include <algorithm>
 
 // PLB slots
 #define MAX_LUT_CAPACITY 8
@@ -253,6 +255,8 @@ class Instance {
     int allRelatedNetHPWL;      // 存取与inst相关的所有net的HPWL之和
     int allRelatedNetHPWLAver;  //cjq modify 24.10.20 平均HPWL
 
+    std::vector<int> movableRegion; //wbx，inst的可移动区域，由inst的net最小外包矩形给出
+
 public:
     Instance(); 
     ~Instance();
@@ -298,7 +302,8 @@ public:
     int getAllRelatedNetHPWL() const { return allRelatedNetHPWL; }
     int getAllRelatedNetHPWLAver() const { return allRelatedNetHPWLAver; }
 
-
+    // 获取instance的可移动区域
+    void generateMovableRegion();
 
     //void connectOutpin(int netID, int idx) { outpins[idx].setNetID(netID); }
 
@@ -312,9 +317,13 @@ class Net {
     int critHPWL; //当前net的关键路径半周线长
     int HPWL; //当前net的总半周线长
 
+    std::vector<int> netArea;   //net 的最小外包矩形
+
 
 public:
-    Net(int netID) : id(netID), clock(false), inpin(nullptr) {} // 默认构造函数
+    Net(int netID) : id(netID), clock(false), inpin(nullptr) {
+        netArea.assign(4,-1);    //(xlb,ylb,xrt,yrt)
+    } // 默认构造函数
     ~Net() {} // 析构函数
 
     // Getter and setter for id
@@ -349,6 +358,8 @@ public:
     void getMergedNonCritPinLocs(bool isBaseline, std::vector<int>& xCoords, std::vector<int>& yCoords);  //返回不是关键时序上的节点
     int getNonCritWireLength(bool isBaseline);  
     int getNonCritHPWL(bool isBaseline);     // cjq 增加半周线长的计算方式   
+
+    std::vector<int> getBoundingBox(){return netArea;}   // 获取最小外包矩形信息
 
     // report util   
     bool reportNet();

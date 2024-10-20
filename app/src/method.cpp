@@ -29,6 +29,9 @@ void FM()
     for (auto iter : glbNetMap)
     {
         Net *net = iter.second;
+        // if(net->getId() == 3141){
+        //     std::cout<<" ";
+        // }
         net->setNetHPWL(isBaseline);
     }
     // 统计inst所有线长以及平均
@@ -38,6 +41,7 @@ void FM()
         Instance *inst = instPair.second; // 获取实例指针
         // 调用函数计算并更新该实例的HPWL      
         inst->calculateAllRelatedNetHPWL(isBaseline);
+        inst->generateMovableRegion();
         // 输出更新后的HPWL值
         // std::cout << "Instance ID: " << instPair.first
         //           << " has updated HPWL = " << inst->getAllRelatedNetHPWL() 
@@ -61,7 +65,11 @@ void FM()
     // for (const auto& p : instHPWL) {
     //     std::cout << "(" << p.first << ", " << p.second << ") ";
     // }
-    // std::cout << std::endl;
+    std::cout << std::endl;
+    // std::cout<< glbInstMap[0]->getInstanceName() <<std::endl;
+
+
+
 
     std::cout << "--------FM--------" << std::endl;
 }
