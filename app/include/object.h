@@ -86,7 +86,7 @@ class Tile {
         // 新增成员变量：lutUsage，存储每个LUT site的使用情况——吴白轩——2024年10月18日
         // 使用 vector 存储每个LUT site的详细使用情况
         std::vector<LUTUsage> lutUsage;     
-        int dffUsage;
+        int dffUsage;   // 剩余的DFF资源
 
     public:
         // Constructor
@@ -135,6 +135,11 @@ class Tile {
         void getRemainingPLBResources(bool isBaseline);
         std::set<int> getUsedPins(Instance* inst);
         void reportTile();
+
+        // 判断tile内部有没有足够资源
+        bool hasEnoughResources(Instance *inst);
+        // 移除inst
+        void removeInstance(Instance *inst);
 };
 
 class ClockRegion {
@@ -297,6 +302,7 @@ public:
     // wbx—2024年10月19日
     std::set<Net *> getRelatedNets() const;
     void calculateAllRelatedNetHPWL(bool isBaseline);
+    void updateInstRelatedNet(bool isBaseline);
 
     // Getter and setter for HPWL
     int getAllRelatedNetHPWL() const { return allRelatedNetHPWL; }
@@ -304,6 +310,7 @@ public:
 
     // 获取instance的可移动区域
     void generateMovableRegion();
+    std::vector<int> getMovableRegion(){return movableRegion;}
 
     //void connectOutpin(int netID, int idx) { outpins[idx].setNetID(netID); }
 

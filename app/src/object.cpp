@@ -415,6 +415,71 @@ void Tile::reportTile()
   }
 }
 
+// 判断inst能够放进tile所在的位置
+bool Tile::hasEnoughResources(Instance *inst)
+{
+  std::string modelType = inst->getModelName();
+
+  if (modelType == "LUT")
+  {
+    int requiredLUTs = 1; // 假设每个实例需要1个LUT
+    int availableLUTs = 0;
+    for (auto &usage : lutUsage)
+    {
+      availableLUTs += usage.numInstances; // 统计剩余LUT资源
+    }
+    return availableLUTs >= requiredLUTs; // 判断是否有足够LUT资源
+  }
+
+  // 检查是否为 "DFF" 类型实例
+  if (modelType == "SEQ" || modelType == "DFF")
+  {
+    // 判断当前Tile内剩余的DFF数量
+    int availableDFFs = dffUsage;
+    // DFF实例的个数表示所需的DFF数量
+    if (availableDFFs >= 1)
+    {
+      return true; // 有足够的DFF资源
+    }
+    else
+    {
+      return false; // DFF资源不足
+    }
+  }
+
+  // 可以扩展其他资源判断
+  return false;
+}
+
+void Tile::removeInstance(Instance *inst)
+{
+  std::string modelType = inst->getModelName(); // 获取实例的类型
+  auto mapIter = instanceMap.find(modelType);   // 在实例映射中找到对应类型的插槽
+
+  if (mapIter != instanceMap.end())
+  {
+    slotArr &slots = mapIter->second;
+
+    //     // 遍历 slot，寻找包含这个实例的 Slot 并移除
+    //     for (Slot *slot : slots) {
+    //         std::list<int> optimizedInstArr = slot->getOptimizedInstances();  // 获取副本
+    //         auto it = std::find(optimizedInstArr.begin(), optimizedInstArr.end(), inst->getInstanceName());
+    //         if (it != optimizedInstArr.end()) {
+    //             optimizedInstArr.erase(it);  // 从副本中移除实例
+    //             slot->clearOptimizedInstances();  // 清空优化实例
+    //             for (int id : optimizedInstArr) {
+    //                 slot->addOptimizedInstance(id);  // 重新插入剩余实例
+    //             }
+    //             std::cout << "Instance " << inst->getInstanceName() << " removed from Tile " << getLocStr() << std::endl;
+    //             return;
+    //         }
+    //     }
+    std::cout << "Instance ";
+  }
+
+  std::cout << "Instance " << inst->getInstanceName() << " not found in Tile " << getLocStr() << std::endl;
+}
+
 bool Tile::initTile(const std::string &tileType)
 {
 
@@ -902,7 +967,7 @@ void Tile::getRemainingPLBResources(bool isBaseline)
           lutUsage[idx].remainingPins = totalUsedPins; // 假设每个LUT有6个引脚
         }
       }
-      else if (modelType == "DFF")
+      else if (modelType == "SEQ")
       {
         usedDFFs += instances.size(); // 统计DFF的使用情况
       }
@@ -918,6 +983,7 @@ void Tile::getRemainingPLBResources(bool isBaseline)
   //   remainingLUTs = 0;
   // if (remainingDFFs < 0)
   //   remainingDFFs = 0;
+  dffUsage = remainingDFFs;
 }
 
 // 获取当前inst已使用的pin
@@ -1088,6 +1154,28 @@ void Instance::calculateAllRelatedNetHPWL(bool isBaseline)
   // 遍历每个相关的net，累加其HPWL
   for (Net *net : relatedNets)
   {
+    // net->setNetHPWL(false);                  // 更新一下net的线长
+    allRelatedNetHPWL += net->getCritHPWL(); // 累加net的CritHPWL
+    allRelatedNetHPWL += net->getHPWL();     // 累加net的HPWL
+  }
+  // cjq modify 24.10.20 平均
+  if (relatedNets.size() > 0)
+    allRelatedNetHPWLAver = allRelatedNetHPWL / relatedNets.size();
+  else
+    allRelatedNetHPWLAver = 0;
+}
+
+// 更新instance相关的所有net的HPWL
+void Instance::updateInstRelatedNet(bool isBaseline)
+{
+  allRelatedNetHPWL = 0; // 初始化为0
+
+  std::set<Net *> relatedNets = getRelatedNets();
+
+  // 遍历每个相关的net，累加其HPWL
+  for (Net *net : relatedNets)
+  {
+    net->setNetHPWL(false);                  // 更新一下net的线长
     allRelatedNetHPWL += net->getCritHPWL(); // 累加net的CritHPWL
     allRelatedNetHPWL += net->getHPWL();     // 累加net的HPWL
   }
