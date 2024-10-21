@@ -239,6 +239,8 @@ int main(int argc, char *argv[])
     
     calculateTileRemain();  
     FM();
+    reportWirelength();
+    result = legalCheck();
     
     // free memory before exit
     for (auto &lib : glbLibMap)

@@ -451,33 +451,31 @@ bool Tile::hasEnoughResources(Instance *inst)
   return false;
 }
 
-void Tile::removeInstance(Instance *inst)
-{
-  std::string modelType = inst->getModelName(); // 获取实例的类型
-  auto mapIter = instanceMap.find(modelType);   // 在实例映射中找到对应类型的插槽
 
-  if (mapIter != instanceMap.end())
-  {
-    slotArr &slots = mapIter->second;
+bool Tile::removeInstance(Instance *inst) {
+    std::string modelType = inst->getModelName();
+    std::string unifiedModelType = unifyModelType(modelType);
 
-    //     // 遍历 slot，寻找包含这个实例的 Slot 并移除
-    //     for (Slot *slot : slots) {
-    //         std::list<int> optimizedInstArr = slot->getOptimizedInstances();  // 获取副本
-    //         auto it = std::find(optimizedInstArr.begin(), optimizedInstArr.end(), inst->getInstanceName());
-    //         if (it != optimizedInstArr.end()) {
-    //             optimizedInstArr.erase(it);  // 从副本中移除实例
-    //             slot->clearOptimizedInstances();  // 清空优化实例
-    //             for (int id : optimizedInstArr) {
-    //                 slot->addOptimizedInstance(id);  // 重新插入剩余实例
-    //             }
-    //             std::cout << "Instance " << inst->getInstanceName() << " removed from Tile " << getLocStr() << std::endl;
-    //             return;
-    //         }
-    //     }
-    std::cout << "Instance ";
-  }
+    // 查找实例类型对应的Slot数组
+    auto mapIter = instanceMap.find(unifiedModelType);
+    if (mapIter == instanceMap.end()) {
+        std::cout << "Error: Slot type not found for model " << modelType << std::endl;
+        return false;
+    }
 
-  std::cout << "Instance " << inst->getInstanceName() << " not found in Tile " << getLocStr() << std::endl;
+    // 遍历Slot，查找并移除该实例
+    for (Slot *slot : mapIter->second) {
+        std::list<int>& instances = slot->getOptimizedInstancesRef(); // 获取优化后的实例列表引用
+        for (auto it = instances.begin(); it != instances.end(); ++it) {
+            if (*it == std::stoi(inst->getInstanceName().substr(5))) {  // 移除以inst_xxx的形式表示的实例
+                instances.erase(it); // 找到实例并移除
+                return true;         // 成功移除，返回true
+            }
+        }
+    }
+
+    std::cout << "Error: Instance not found in tile" << std::endl;
+    return false; // 未找到实例，返回false
 }
 
 bool Tile::initTile(const std::string &tileType)

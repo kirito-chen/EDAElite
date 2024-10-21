@@ -65,6 +65,7 @@ class Slot {
 
         void addBaselineInstance(int instID) { baselineInstArr.push_back(instID); }
         std::list<int> getBaselineInstances() const { return baselineInstArr; }
+        std::list<int>& getOptimizedInstancesRef() { return optimizedInstArr; }
 
 };
 
@@ -140,7 +141,7 @@ class Tile {
         // 判断tile内部有没有足够资源
         bool hasEnoughResources(Instance *inst);
         // 移除inst
-        void removeInstance(Instance *inst);
+        bool removeInstance(Instance *inst);
 
         // cjq modify 返回tile的instTypes类型的可插入的offset  // LUT  SEQ
         int findOffset(std::string instTypes, Instance *inst, bool isBaseline);
