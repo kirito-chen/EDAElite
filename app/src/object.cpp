@@ -1034,15 +1034,73 @@ int Tile::findOffset(std::string instTypes, Instance *inst, bool isBaseline)
     offset = index;
   }
   else if(instTypes == "SEQ"){
-    // SEQ只要返回一个空位子即可
+    int instID = std::stoi(inst->getInstanceName().substr(5));  // 从第5个字符开始截取，转换为整数
     slotArr slotArrTmp = instanceMap[instTypes];
-    for(int i = 0; i < slotArrTmp.size(); i++){
-      Slot *slot = slotArrTmp[i];
-      std::list<int> listTmp;
-      if(isBaseline)  listTmp = slot->getBaselineInstances();
-      else listTmp = slot->getOptimizedInstances();
-      if(listTmp.size() == 0){
-        offset = i;
+    for(int j = 0; j < 2; j++){
+      //bank0-1
+      std::set<int> bankId;
+      bankId.insert(instID);
+      for(int i = j*8; i < (j+1)*8; i++){
+        Slot* slotTmp = slotArrTmp[i];
+        std::list<int> instListTmp;
+        if(isBaseline) instListTmp = slotTmp->getBaselineInstances();
+        else instListTmp = slotTmp->getOptimizedInstances();
+        for(int id : instListTmp){
+          bankId.insert(id);
+        }
+      }
+      //判断每个inst的引脚
+      std::set<int> clkNets; //不超过1
+      std::set<int> ceNets; //不超过2
+      std::set<int> srNets; //不超过1
+      for(int i : bankId){
+        Instance* instPtr = glbInstMap[i];
+        int numInpins = instPtr->getNumInpins();
+        for (int i = 0; i < numInpins; i++)
+        {
+          Pin *pin = instPtr->getInpin(i);
+          int netID = pin->getNetID();
+          if (netID >= 0)
+          {
+            PinProp prop = pin->getProp();
+            if (prop == PIN_PROP_CE)
+            {
+              ceNets.insert(netID);
+            }
+            else if (prop == PIN_PROP_CLOCK)
+            {
+              clkNets.insert(netID);
+            }
+            else if (prop == PIN_PROP_RESET)
+            {
+              srNets.insert(netID);
+            }
+          }
+        }
+      }
+
+      int numClk = clkNets.size();      
+      int numReset = srNets.size();    
+      int numCe = ceNets.size();
+
+      if (numClk > MAX_TILE_CLOCK_PER_PLB_BANK || numCe > MAX_TILE_CE_PER_PLB_BANK 
+      || numReset > MAX_TILE_RESET_PER_PLB_BANK) {
+        offset = -1;
+        return offset;
+      }
+      else{
+        // SEQ只要返回一个空位子即可
+        slotArr slotArrTmp = instanceMap[instTypes];
+        for(int i = j*8; i < (j+1)*8; i++){
+          Slot *slot = slotArrTmp[i];
+          std::list<int> listTmp;
+          if(isBaseline)  listTmp = slot->getBaselineInstances();
+          else listTmp = slot->getOptimizedInstances();
+          if(listTmp.size() == 0){
+            offset = i;
+            break;
+          }
+        }
       }
     }
   }
