@@ -41,8 +41,12 @@ void moveInstance(Instance *inst, Tile *newTile) {
         oldTile->removeInstance(inst);  // 从旧Tile中移除inst
     }
     int instID = std::stoi(inst->getInstanceName().substr(5));  // 从第5个字符开始截取，转换为整数
-
-    newTile->addInstance(instID, 0, inst->getModelName(), false);  // 将inst添加到新Tile
+    int offset = newTile->findOffset(inst->getModelName(), inst, false); //cjq modify 获取合并引脚数不超过6的最大引脚数的插槽位置
+    if(offset == -1){
+        std::cout<<"Unable to find any available space to place\n";
+        exit(1);
+    }
+    newTile->addInstance(instID, offset, inst->getModelName(), false);  // 将inst添加到新Tile
     inst->setLocation(std::make_tuple(newTile->getCol(), newTile->getRow(), 0));  // 更新inst的位置
 }
 

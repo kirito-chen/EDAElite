@@ -986,6 +986,71 @@ void Tile::getRemainingPLBResources(bool isBaseline)
   dffUsage = remainingDFFs;
 }
 
+// cjq modify 返回tile的instTypes类型的可插入的offset // LUT  SEQ  返回-1表示找不到
+int Tile::findOffset(std::string instTypes, Instance *inst, bool isBaseline)
+{
+  int offset = -1;
+  if(instTypes == "LUT"){
+    std::vector<int> pinNum(8,0);   // 记录对应lut位置能放下的引脚 -1为不可放置
+    //获取int相关的net
+    std::set<Net *> netSet = inst->getRelatedNets();
+    std::set<int> netIdSet; //net ID 的set
+    for(auto net : netSet){
+      netIdSet.insert(net->getId());
+    }
+
+    slotArr slotArrTmp = instanceMap[instTypes];
+    for(int i = 0; i < slotArrTmp.size(); i++){
+      Slot *slot = slotArrTmp[i];
+      std::list<int> listTmp;
+      if(isBaseline)  listTmp = slot->getBaselineInstances();
+      else listTmp = slot->getOptimizedInstances();
+      //当已经插入的inst大于等于2则不考虑了
+      if(listTmp.size() >= 2){
+        pinNum[i] = -1;
+      }
+      else if(listTmp.size() == 1){
+        int instIdTmp = listTmp.front();
+        Instance *instTmp = glbInstMap[instIdTmp];
+        std::set<Net *> netSetTmp = instTmp->getRelatedNets();
+        std::set<int> netIdSetTmp; 
+        for(auto net : netSetTmp){
+          netIdSetTmp.insert(net->getId());
+        }
+        // 假设插入当前inst
+        for(int i : netIdSet){
+          netIdSetTmp.insert(i); //重复的会被过滤掉
+        }
+        pinNum[i] = netIdSetTmp.size();
+      }
+    }
+    // 找到不大于6的最大的引脚的下标
+    int maxVal = -1; // 用来存储不大于6的最大数
+    int index = -1;  // 用来存储该数的下标
+    for (int i = 0; i < pinNum.size(); ++i) {
+        if (pinNum[i] <= 6 && pinNum[i] > maxVal) {
+            maxVal = pinNum[i];
+            index = i;
+        }
+    }
+    offset = index;
+  }
+  else if(instTypes == "SEQ"){
+    // SEQ只要返回一个空位子即可
+    slotArr slotArrTmp = instanceMap[instTypes];
+    for(int i = 0; i < slotArrTmp.size(); i++){
+      Slot *slot = slotArrTmp[i];
+      std::list<int> listTmp;
+      if(isBaseline)  listTmp = slot->getBaselineInstances();
+      else listTmp = slot->getOptimizedInstances();
+      if(listTmp.size() == 0){
+        offset = i;
+      }
+    }
+  }
+  return offset;
+}
+
 // 获取当前inst已使用的pin
 std::set<int> Tile::getUsedPins(Instance *inst)
 {
