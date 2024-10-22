@@ -9,6 +9,7 @@
 #include "rsmt.h"
 #include "method.h"
 #include "test.h"
+#include "sa.h"
 
 int main(int argc, char *argv[])
 {
@@ -217,6 +218,10 @@ int main(int argc, char *argv[])
                     }
                 }
             }
+        }
+        else if (tokens[0] == "SA")
+        {
+            SA(true);
         }
         else if (tokens[0] == "exit")
         {
