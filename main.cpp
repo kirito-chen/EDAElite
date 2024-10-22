@@ -227,7 +227,7 @@ int main(int argc, char *argv[])
         {
             break;
         }
-        else if (tokens[0] == "run")
+        else if (tokens[0] == "FM")
         {
             calculateTileRemain();
             for (size_t i = 0; i < 10; i++)
