@@ -230,11 +230,11 @@ int main(int argc, char *argv[])
         else if (tokens[0] == "FM")
         {
             calculateTileRemain();
-            for (size_t i = 0; i < 10; i++)
+            for (size_t i = 0; i < 3; i++)
             {
-                std::cout << "第" << i << "次迭代";
-                FM();
                 reportWirelength();
+                std::cout << "第" << i +1 << "次迭代";
+                FM();
             }
         }
         else if(tokens[0] == "generateResult")
