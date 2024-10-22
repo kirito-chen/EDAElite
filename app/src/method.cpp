@@ -4,6 +4,9 @@
 #include "object.h"
 #include "method.h"
 #include <algorithm>
+#include <fstream>
+#include <iostream>
+#include <map>
 
 // 计算PLB余量的函数——吴白轩——2024年10月18日
 void calculateTileRemain()
@@ -19,44 +22,43 @@ void calculateTileRemain()
     }
 }
 
-int calculateGain(Instance *inst, Tile *newTile) {
+int calculateGain(Instance *inst, Tile *newTile, bool isBaseline) {
     int originalHPWL = inst->getAllRelatedNetHPWL();  // 获取移动前的HPWL
 
     // 临时将inst移动到newTile，计算新的HPWL
-    auto originalLocation = inst->getLocation();
-    inst->setLocation(std::make_tuple(newTile->getCol(), newTile->getRow(), 0));
-    inst->updateInstRelatedNet(false);
+    auto originalLocation = inst->getBaseLocation();
+    inst->setBaseLocation(std::make_tuple(newTile->getCol(), newTile->getRow(), 0));
+    inst->updateInstRelatedNet(isBaseline);
     int newHPWL = inst->getAllRelatedNetHPWL();
 
     // 恢复原始位置
-    inst->setLocation(originalLocation);
+    inst->setBaseLocation(originalLocation);
 
     // 计算增益：HPWL减少的量
     return originalHPWL - newHPWL;
 }
 
-bool moveInstance(Instance *inst, Tile *newTile) {
+bool moveInstance(Instance *inst, Tile *newTile, bool isBaseline) {
     int instID = std::stoi(inst->getInstanceName().substr(5));  // 从第5个字符开始截取，转换为整数
-    int offset = newTile->findOffset(inst->getModelName(), inst, false); //cjq modify 获取合并引脚数不超过6的最大引脚数的插槽位置
+    int offset = newTile->findOffset(inst->getModelName(), inst, isBaseline); //cjq modify 获取合并引脚数不超过6的最大引脚数的插槽位置
     if(offset == -1){
-        std::cout<<"Unable to find any available space to place\n";
+        // std::cout<<"Unable to find any available space to place\n";
         return false;
     }
     //可以进行移动
-    Tile *oldTile = chip.getTile(std::get<0>(inst->getLocation()), std::get<1>(inst->getLocation()));
+    Tile *oldTile = chip.getTile(std::get<0>(inst->getBaseLocation()), std::get<1>(inst->getBaseLocation()));
     if (oldTile != nullptr) {
         oldTile->removeInstance(inst);  // 从旧Tile中移除inst
     }
-    newTile->addInstance(instID, offset, inst->getModelName(), false);  // 将inst添加到新Tile
-    inst->setLocation(std::make_tuple(newTile->getCol(), newTile->getRow(), 0));  // 更新inst的位置
+    newTile->addInstance(instID, offset, inst->getModelName(), isBaseline);  // 将inst添加到新Tile
+    inst->setBaseLocation(std::make_tuple(newTile->getCol(), newTile->getRow(), 0));  // 更新inst的位置
     return true;
-    
 }
 
 void FM()
 {
     std::cout << "--------FM--------" << std::endl;
-    bool isBaseline = false; // 可以根据需求选择是否计算 baseline 状态
+    bool isBaseline = true; // 可以根据需求选择是否计算 baseline 状态
     
     // 统计每个net线长
     for (auto iter : glbNetMap)
@@ -117,7 +119,7 @@ void FM()
                 }
 
                 // 计算当前移动的增益
-                int gain = calculateGain(inst, tile);
+                int gain = calculateGain(inst, tile, isBaseline);
                 if (gain > bestGain) {
                     bestGain = gain;
                     bestTile = tile;  // 更新最佳Tile
@@ -127,11 +129,72 @@ void FM()
 
         // 如果找到最佳位置并且增益为正，则移动inst
         if (bestTile != nullptr && bestGain > 0) {
-            // moveInstance(inst, bestTile);
-            if(moveInstance(inst, bestTile))
-                std::cout << "Moved instance " << inst->getInstanceName() << " to tile " << bestTile->getLocStr() << std::endl;
+            moveInstance(inst, bestTile, isBaseline);
+            // if(moveInstance(inst, bestTile))
+            //     std::cout << "Moved instance " << inst->getInstanceName() << " to tile " << bestTile->getLocStr() << std::endl;
         }
     }
 
     std::cout << "--------FM完成--------" << std::endl;
+}
+
+
+// 统计每种类型的数量
+void generateOutputFile(const std::string &filename) {
+    std::ofstream outFile(filename);
+    if (!outFile) {
+        std::cerr << "无法打开文件: " << filename << std::endl;
+        return;
+    }
+
+    // 预定义表头中涉及的类型名称和顺序
+    std::vector<std::string> modelOrder = {
+        "CARRY4", "F7MUX", "LUT1", "LUT2", "LUT3", "LUT4", "LUT5", "LUT6", 
+        "LUT6X", "SEQ", "DRAM", "DSP", "RAMA", "IOA", "IOB", "GCLK"
+    };
+
+    // 用于统计每种类型实例的数量
+    std::map<std::string, int> typeCountMap;
+
+    // 遍历 glbInstMap 统计每种类型的数量
+    for (const auto &instPair : glbInstMap) {
+        Instance *inst = instPair.second;
+        std::string type = inst->getModelName();
+        typeCountMap[type]++;
+    }
+
+    // 输出统计表头，按照固定顺序
+    outFile << "# List of Models in This Case: \n";
+    for (const auto &model : modelOrder) {
+        outFile << "#   " << std::setw(25) << std::left << model << ": " << typeCountMap[model] << "\n";
+    }
+    outFile << "\n";
+
+    // 遍历 glbInstMap 输出实例的位置信息和类型
+    for (const auto &instPair : glbInstMap) {
+        Instance *inst = instPair.second;
+        int instID = instPair.first;
+
+        // 获取实例的基础位置 (x, y, z)
+        auto loc = inst->getBaseLocation();
+        int x = std::get<0>(loc);
+        int y = std::get<1>(loc);
+        int z = std::get<2>(loc);
+
+        // 获取实例的类型
+        std::string type = inst->getModelName();
+
+        // 输出实例位置信息
+        outFile << "X" << x << "Y" << y << "Z" << z << " " << type << " inst_" << instID;
+
+        // 如果实例是固定的，输出 FIXED
+        if (inst->isFixed()) {
+            outFile << " FIXED";
+        }
+
+        outFile << "\n";
+    }
+
+    outFile.close();
+    std::cout << "文件生成成功: " << filename << std::endl;
 }

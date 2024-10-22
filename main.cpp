@@ -1,3 +1,8 @@
+/*
+代码规范化处理——吴白轩
+1、只保留read arch与read design，添加node.out输出函数，所有的坐标变化全在baseline上进行修改——2024年10月22日
+*/
+
 #include "object.h"
 #include "lib.h"
 #include "arch.h"
@@ -222,6 +227,26 @@ int main(int argc, char *argv[])
         {
             break;
         }
+        else if (tokens[0] == "run")
+        {
+            calculateTileRemain();
+            for (size_t i = 0; i < 10; i++)
+            {
+                std::cout << "第" << i << "次迭代";
+                FM();
+                reportWirelength();
+            }
+        }
+        else if(tokens[0] == "generateResult")
+        {
+            if (tokens.size() != 2)
+            {
+                std::cout << "Need generate path " << std::endl;
+                result = false;
+            }
+            std::string outputFilePath = tokens[1];
+            generateOutputFile(outputFilePath);
+        }
         else
         {
             std::cout << "Invalid command: " << command << std::endl;
@@ -236,12 +261,18 @@ int main(int argc, char *argv[])
 
     //-------------------测试---------------
     // testHPWL();
-    
-    calculateTileRemain();  
-    FM();
-    reportWirelength();
-    result = legalCheck();
-    
+    // reportWirelength();
+    // calculateTileRemain();
+    // generateOutputFile("wubaixuantest.node.out");
+    // for (size_t i = 0; i < 10; i++)
+    // {
+    //     std::cout << "第" << i << "次迭代";
+    //     FM();
+    //     reportWirelength();
+    // }
+
+    // result = legalCheck();
+
     // free memory before exit
     for (auto &lib : glbLibMap)
     {

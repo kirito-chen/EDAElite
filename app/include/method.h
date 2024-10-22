@@ -7,3 +7,4 @@
 
 void calculateTileRemain();
 void FM();
+void generateOutputFile(const std::string &filename);

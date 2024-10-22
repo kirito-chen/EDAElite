@@ -64,7 +64,7 @@ class Slot {
         std::list<int> getOptimizedInstances() const { return optimizedInstArr; }
 
         void addBaselineInstance(int instID) { baselineInstArr.push_back(instID); }
-        std::list<int> getBaselineInstances() const { return baselineInstArr; }
+        std::list<int>& getBaselineInstances()  { return baselineInstArr; }
         std::list<int>& getOptimizedInstancesRef() { return optimizedInstArr; }
 
 };

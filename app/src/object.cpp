@@ -465,7 +465,7 @@ bool Tile::removeInstance(Instance *inst) {
 
     // 遍历Slot，查找并移除该实例
     for (Slot *slot : mapIter->second) {
-        std::list<int>& instances = slot->getOptimizedInstancesRef(); // 获取优化后的实例列表引用
+        std::list<int>& instances = slot->getBaselineInstances(); // 获取优化后的实例列表引用
         for (auto it = instances.begin(); it != instances.end(); ++it) {
             if (*it == std::stoi(inst->getInstanceName().substr(5))) {  // 移除以inst_xxx的形式表示的实例
                 instances.erase(it); // 找到实例并移除
