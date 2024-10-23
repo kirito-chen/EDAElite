@@ -22,8 +22,9 @@ void calculateTileRemain()
     }
 }
 
-int calculateGain(Instance *inst, Tile *newTile, bool isBaseline) {
-    int originalHPWL = inst->getAllRelatedNetHPWL();  // 获取移动前的HPWL
+int calculateGain(Instance *inst, Tile *newTile, bool isBaseline)
+{
+    int originalHPWL = inst->getAllRelatedNetHPWL(); // 获取移动前的HPWL
 
     // 临时将inst移动到newTile，计算新的HPWL
     auto originalLocation = inst->getBaseLocation();
@@ -38,66 +39,71 @@ int calculateGain(Instance *inst, Tile *newTile, bool isBaseline) {
     return originalHPWL - newHPWL;
 }
 
-bool moveInstance(Instance *inst, Tile *newTile, bool isBaseline) {
-    int instID = std::stoi(inst->getInstanceName().substr(5));  // 从第5个字符开始截取，转换为整数
-    int offset = newTile->findOffset(inst->getModelName(), inst, isBaseline); //cjq modify 获取合并引脚数不超过6的最大引脚数的插槽位置
-    if(offset == -1){
+bool moveInstance(Instance *inst, Tile *newTile, bool isBaseline)
+{
+    int instID = std::stoi(inst->getInstanceName().substr(5));                // 从第5个字符开始截取，转换为整数
+    int offset = newTile->findOffset(inst->getModelName(), inst, isBaseline); // cjq modify 获取合并引脚数不超过6的最大引脚数的插槽位置
+    if (offset == -1)
+    {
         // std::cout<<"Unable to find any available space to place\n";
         return false;
     }
-    //可以进行移动
+    // 可以进行移动
     Tile *oldTile = chip.getTile(std::get<0>(inst->getBaseLocation()), std::get<1>(inst->getBaseLocation()));
-    if (oldTile != nullptr) {
-        oldTile->removeInstance(inst);  // 从旧Tile中移除inst
+    if (oldTile != nullptr)
+    {
+        oldTile->removeInstance(inst); // 从旧Tile中移除inst
     }
-    newTile->addInstance(instID, offset, inst->getModelName(), isBaseline);  // 将inst添加到新Tile
-    inst->setBaseLocation(std::make_tuple(newTile->getCol(), newTile->getRow(), 0));  // 更新inst的位置
+    newTile->addInstance(instID, offset, inst->getModelName(), isBaseline);          // 将inst添加到新Tile
+    inst->setBaseLocation(std::make_tuple(newTile->getCol(), newTile->getRow(), offset)); // 更新inst的位置
     return true;
 }
 
 void FM()
 {
     std::cout << "--------FM--------" << std::endl;
-    bool isBaseline = true; // 可以根据需求选择是否计算 baseline 状态
-    
+    bool isBaseline = false; // 可以根据需求选择是否计算 baseline 状态
+
     // 统计每个net线长
     for (auto iter : glbNetMap)
     {
         Net *net = iter.second;
-        net->setNetHPWL(isBaseline);  // 计算并设置net的半周线长
+        net->setNetHPWL(isBaseline); // 计算并设置net的半周线长
     }
 
     // 统计每个inst的所有相关net的线长之和以及平均线长
     for (auto &instPair : glbInstMap)
     {
         Instance *inst = instPair.second;
-        inst->calculateAllRelatedNetHPWL(isBaseline);  // 计算与该inst相关的net的总HPWL
-        inst->generateMovableRegion();  // 生成可移动区域
+        inst->calculateAllRelatedNetHPWL(isBaseline); // 计算与该inst相关的net的总HPWL
+        inst->generateMovableRegion();                // 生成可移动区域
     }
 
     // 根据每个实例的HPWL平均值进行排序
-    std::vector<std::pair<int, int>> instHPWL;  // {instID, HPWLaver}
+    std::vector<std::pair<int, int>> instHPWL; // {instID, HPWLaver}
     for (auto &instPair : glbInstMap)
     {
         int instanceID = instPair.first;
         Instance *inst = instPair.second;
-        int HPWLAver = inst->getAllRelatedNetHPWLAver();  // 获取HPWL平均值
-        instHPWL.emplace_back(instanceID, HPWLAver);  // 将instID与HPWLAver存入
+        int HPWLAver = inst->getAllRelatedNetHPWLAver(); // 获取HPWL平均值
+        instHPWL.emplace_back(instanceID, HPWLAver);     // 将instID与HPWLAver存入
     }
 
     // 对实例按HPWL降序排序
-    std::sort(instHPWL.begin(), instHPWL.end(), [](const std::pair<int, int>& a, const std::pair<int, int>& b) {
-        return a.second > b.second;  // 降序
-    });
+    std::sort(instHPWL.begin(), instHPWL.end(), [](const std::pair<int, int> &a, const std::pair<int, int> &b)
+              {
+                  return a.second > b.second; // 降序
+              });
 
     // 遍历排序后的实例，尝试移动
     for (const auto &instPair : instHPWL)
     {
-        Instance *inst = glbInstMap[instPair.first];  // 获取实例
-        if (inst->isFixed()) continue;  // 跳过固定的实例
+        Instance *inst = glbInstMap[instPair.first]; // 获取实例
+        if (inst->isFixed())
+            continue; // 跳过固定的实例
 
-        Tile *bestTile = nullptr;  // 最佳的Tile位置
-        int bestGain = 0;  // 最佳增益
+        Tile *bestTile = nullptr; // 最佳的Tile位置
+        int bestGain = 0;         // 最佳增益
 
         // 遍历inst的可移动区域
         int x_min = inst->getMovableRegion()[0];
@@ -105,30 +111,36 @@ void FM()
         int x_max = inst->getMovableRegion()[2];
         int y_max = inst->getMovableRegion()[3];
 
-        for (int x = x_min; x <= x_max; ++x) {
-            for (int y = y_min; y <= y_max; ++y) {
-                Tile *tile = chip.getTile(x, y);  // 获取目标Tile
-                if (tile == nullptr || !tile->matchType(inst->getModelName())) {
-                    continue;  // 如果Tile不存在或类型不匹配，跳过
+        for (int x = x_min; x <= x_max; ++x)
+        {
+            for (int y = y_min; y <= y_max; ++y)
+            {
+                Tile *tile = chip.getTile(x, y); // 获取目标Tile
+                if (tile == nullptr || !tile->matchType(inst->getModelName()))
+                {
+                    continue; // 如果Tile不存在或类型不匹配，跳过
                 }
 
                 // 检查Tile是否有足够资源容纳inst
-                tile->getRemainingPLBResources(false);
-                if (!tile->hasEnoughResources(inst)) {
-                    continue;  // 如果资源不足，跳过
+                tile->getRemainingPLBResources(isBaseline);
+                if (!tile->hasEnoughResources(inst))
+                {
+                    continue; // 如果资源不足，跳过
                 }
 
                 // 计算当前移动的增益
                 int gain = calculateGain(inst, tile, isBaseline);
-                if (gain > bestGain) {
+                if (gain > bestGain)
+                {
                     bestGain = gain;
-                    bestTile = tile;  // 更新最佳Tile
+                    bestTile = tile; // 更新最佳Tile
                 }
             }
         }
 
         // 如果找到最佳位置并且增益为正，则移动inst
-        if (bestTile != nullptr && bestGain > 0) {
+        if (bestTile != nullptr && bestGain > 0)
+        {
             moveInstance(inst, bestTile, isBaseline);
             // if(moveInstance(inst, bestTile))
             //     std::cout << "Moved instance " << inst->getInstanceName() << " to tile " << bestTile->getLocStr() << std::endl;
@@ -138,26 +150,148 @@ void FM()
     std::cout << "--------FM完成--------" << std::endl;
 }
 
+void FM_pre()
+{
+    std::cout << "--------FM--------" << std::endl;
+    bool isBaseline = true; // 可以根据需求选择是否计算 baseline 状态
+
+    // 统计每个net线长
+    for (auto iter : glbNetMap)
+    {
+        Net *net = iter.second;
+        net->setNetHPWL(isBaseline); // 计算并设置net的半周线长
+    }
+
+    // 统计每个inst的所有相关net的线长之和以及平均线长
+    for (auto &instPair : glbInstMap)
+    {
+        Instance *inst = instPair.second;
+        inst->calculateAllRelatedNetHPWL(isBaseline); // 计算与该inst相关的net的总HPWL
+        inst->generateMovableRegion();                // 生成可移动区域
+    }
+
+    // 根据每个实例的HPWL平均值进行排序
+    std::vector<std::pair<int, int>> instHPWL; // {instID, HPWLaver}
+    for (auto &instPair : glbInstMap)
+    {
+        int instanceID = instPair.first;
+        Instance *inst = instPair.second;
+        int HPWLAver = inst->getAllRelatedNetHPWLAver(); // 获取HPWL平均值
+        instHPWL.emplace_back(instanceID, HPWLAver);     // 将instID与HPWLAver存入
+    }
+
+    // 对实例按HPWL降序排序，优先优化影响较大的实例
+    std::sort(instHPWL.begin(), instHPWL.end(), [](const std::pair<int, int> &a, const std::pair<int, int> &b)
+              {
+                  return a.second > b.second; // 降序
+              });
+
+    // 多次迭代优化，设置最大迭代次数和增益收敛阈值
+    int maxIterations = 10;
+    double gainThreshold = 0.01; // 增益收敛阈值
+
+    for (int iter = 0; iter < maxIterations; ++iter)
+    {
+        bool anyImprovement = false; // 标志是否有增益
+        double totalGain = 0;        // 累计增益
+
+        // 遍历排序后的实例，尝试移动
+        for (const auto &instPair : instHPWL)
+        {
+            Instance *inst = glbInstMap[instPair.first]; // 获取实例
+            if (inst->isFixed())
+                continue; // 跳过固定的实例
+
+            Tile *bestTile = nullptr; // 最佳的Tile位置
+            int bestGain = 0;         // 最佳增益
+
+            // 获取可移动区域
+            int x_min = inst->getMovableRegion()[0];
+            int y_min = inst->getMovableRegion()[1];
+            int x_max = inst->getMovableRegion()[2];
+            int y_max = inst->getMovableRegion()[3];
+
+            // 提前筛选出资源充足且类型匹配的Tiles
+            std::vector<Tile*> candidateTiles;
+            for (int x = x_min; x <= x_max; ++x)
+            {
+                for (int y = y_min; y <= y_max; ++y)
+                {
+                    Tile *tile = chip.getTile(x, y); // 获取目标Tile
+                    if (tile == nullptr || !tile->matchType(inst->getModelName()))
+                    {
+                        continue; // 如果Tile不存在或类型不匹配，跳过
+                    }
+
+                    // 先检查剩余资源是否可能足够
+                    tile->getRemainingPLBResources(isBaseline);
+                    if (!tile->hasEnoughResources(inst))
+                    {
+                        continue; // 如果资源不足，跳过
+                    }
+
+                    candidateTiles.push_back(tile); // 资源充足的候选Tile
+                }
+            }
+
+            // 遍历筛选出的候选Tile，计算增益
+            for (Tile *tile : candidateTiles)
+            {
+                // 增益包括HPWL、资源利用率、信号延迟等
+                int gain = calculateGain(inst, tile, isBaseline);
+
+                if (gain > bestGain)
+                {
+                    bestGain = gain;
+                    bestTile = tile; // 更新最佳Tile
+                }
+            }
+
+            // 如果找到最佳位置并且增益为正，则移动inst
+            if (bestTile != nullptr && bestGain > 0)
+            {
+                moveInstance(inst, bestTile, isBaseline);
+                totalGain += bestGain;
+                anyImprovement = true; // 记录此次有改进
+                std::cout << "Moved instance " << inst->getInstanceName() << " to tile " << bestTile->getLocStr() << std::endl;
+            }
+        }
+
+        // 如果本次迭代增益不明显或没有改进，则终止优化
+        if (!anyImprovement || totalGain < gainThreshold)
+        {
+            break; // 提前退出循环
+        }
+
+        std::cout << "Iteration " << iter + 1 << " completed with total gain: " << totalGain << std::endl;
+    }
+
+    std::cout << "--------FM完成--------" << std::endl;
+}
+
+
 
 // 统计每种类型的数量
-void generateOutputFile(const std::string &filename) {
+void generateOutputFile(const std::string &filename)
+{
     std::ofstream outFile(filename);
-    if (!outFile) {
+    if (!outFile)
+    {
         std::cerr << "无法打开文件: " << filename << std::endl;
         return;
     }
 
     // 预定义表头中涉及的类型名称和顺序
     std::vector<std::string> modelOrder = {
-        "CARRY4", "F7MUX", "LUT1", "LUT2", "LUT3", "LUT4", "LUT5", "LUT6", 
-        "LUT6X", "SEQ", "DRAM", "DSP", "RAMA", "IOA", "IOB", "GCLK"
-    };
+        "CARRY4", "F7MUX", "LUT1", "LUT2", "LUT3", "LUT4", "LUT5", "LUT6",
+        "LUT6X", "SEQ", "DRAM", "DSP", "RAMA", "IOA", "IOB", "GCLK"};
 
     // 用于统计每种类型实例的数量
     std::map<std::string, int> typeCountMap;
 
     // 遍历 glbInstMap 统计每种类型的数量
-    for (const auto &instPair : glbInstMap) {
+    for (const auto &instPair : glbInstMap)
+    {
         Instance *inst = instPair.second;
         std::string type = inst->getModelName();
         typeCountMap[type]++;
@@ -165,13 +299,15 @@ void generateOutputFile(const std::string &filename) {
 
     // 输出统计表头，按照固定顺序
     outFile << "# List of Models in This Case: \n";
-    for (const auto &model : modelOrder) {
+    for (const auto &model : modelOrder)
+    {
         outFile << "#   " << std::setw(25) << std::left << model << ": " << typeCountMap[model] << "\n";
     }
     outFile << "\n";
 
     // 遍历 glbInstMap 输出实例的位置信息和类型
-    for (const auto &instPair : glbInstMap) {
+    for (const auto &instPair : glbInstMap)
+    {
         Instance *inst = instPair.second;
         int instID = instPair.first;
 
@@ -188,7 +324,8 @@ void generateOutputFile(const std::string &filename) {
         outFile << "X" << x << "Y" << y << "Z" << z << " " << type << " inst_" << instID;
 
         // 如果实例是固定的，输出 FIXED
-        if (inst->isFixed()) {
+        if (inst->isFixed())
+        {
             outFile << " FIXED";
         }
 
@@ -197,4 +334,10 @@ void generateOutputFile(const std::string &filename) {
 
     outFile.close();
     std::cout << "文件生成成功: " << filename << std::endl;
+}
+
+// 初始放置，降维模拟退火
+void initialPlacement()
+{
+    std::cout << " Initial Placement " << std::endl;
 }

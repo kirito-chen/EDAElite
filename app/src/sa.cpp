@@ -5,5 +5,5 @@
 #include <algorithm>
 
 void SA(bool isBaseline){
-    
+    std::cout<<"SA"<<std::endl;
 }

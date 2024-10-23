@@ -226,7 +226,10 @@ int main(int argc, char *argv[])
         }
         else if (tokens[0] == "SA")
         {
-            SA(true);
+            // SA(true);
+        }
+        else if (tokens[0] == "Initial_Placement")
+        {
         }
         else if (tokens[0] == "exit")
         {
@@ -235,14 +238,15 @@ int main(int argc, char *argv[])
         else if (tokens[0] == "FM")
         {
             calculateTileRemain();
-            for (size_t i = 0; i < 3; i++)
+            reportWirelength();
+            for (size_t i = 0; i < 1; i++)
             {
-                reportWirelength();
-                std::cout << "第" << i +1 << "次迭代";
+                std::cout << "第" << i + 1 << "次迭代";
                 FM();
+                reportWirelength();
             }
         }
-        else if(tokens[0] == "generateResult")
+        else if (tokens[0] == "generateResult")
         {
             if (tokens.size() != 2)
             {

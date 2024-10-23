@@ -451,31 +451,35 @@ bool Tile::hasEnoughResources(Instance *inst)
   return false;
 }
 
+bool Tile::removeInstance(Instance *inst)
+{
+  std::string modelType = inst->getModelName();
+  std::string unifiedModelType = unifyModelType(modelType);
 
-bool Tile::removeInstance(Instance *inst) {
-    std::string modelType = inst->getModelName();
-    std::string unifiedModelType = unifyModelType(modelType);
+  // 查找实例类型对应的Slot数组
+  auto mapIter = instanceMap.find(unifiedModelType);
+  if (mapIter == instanceMap.end())
+  {
+    std::cout << "Error: Slot type not found for model " << modelType << std::endl;
+    return false;
+  }
 
-    // 查找实例类型对应的Slot数组
-    auto mapIter = instanceMap.find(unifiedModelType);
-    if (mapIter == instanceMap.end()) {
-        std::cout << "Error: Slot type not found for model " << modelType << std::endl;
-        return false;
+  // 遍历Slot，查找并移除该实例
+  for (Slot *slot : mapIter->second)
+  {
+    std::list<int> &instances = slot->getBaselineInstances(); // 获取优化后的实例列表引用
+    for (auto it = instances.begin(); it != instances.end(); ++it)
+    {
+      if (*it == std::stoi(inst->getInstanceName().substr(5)))
+      {                      // 移除以inst_xxx的形式表示的实例
+        instances.erase(it); // 找到实例并移除
+        return true;         // 成功移除，返回true
+      }
     }
+  }
 
-    // 遍历Slot，查找并移除该实例
-    for (Slot *slot : mapIter->second) {
-        std::list<int>& instances = slot->getBaselineInstances(); // 获取优化后的实例列表引用
-        for (auto it = instances.begin(); it != instances.end(); ++it) {
-            if (*it == std::stoi(inst->getInstanceName().substr(5))) {  // 移除以inst_xxx的形式表示的实例
-                instances.erase(it); // 找到实例并移除
-                return true;         // 成功移除，返回true
-            }
-        }
-    }
-
-    std::cout << "Error: Instance not found in tile" << std::endl;
-    return false; // 未找到实例，返回false
+  std::cout << "Error: Instance not found in tile" << std::endl;
+  return false; // 未找到实例，返回false
 }
 
 bool Tile::initTile(const std::string &tileType)
@@ -988,36 +992,45 @@ void Tile::getRemainingPLBResources(bool isBaseline)
 int Tile::findOffset(std::string instTypes, Instance *inst, bool isBaseline)
 {
   int offset = -1;
-  if(instTypes == "LUT"){
-    std::vector<int> pinNum(8,0);   // 记录对应lut位置能放下的引脚 -1为不可放置
-    //获取int相关的net
+  if (instTypes == "LUT")
+  {
+    std::vector<int> pinNum(8, 0); // 记录对应lut位置能放下的引脚 -1为不可放置
+    // 获取int相关的net
     std::set<Net *> netSet = inst->getRelatedNets();
-    std::set<int> netIdSet; //net ID 的set
-    for(auto net : netSet){
+    std::set<int> netIdSet; // net ID 的set
+    for (auto net : netSet)
+    {
       netIdSet.insert(net->getId());
     }
 
     slotArr slotArrTmp = instanceMap[instTypes];
-    for(int i = 0; i < slotArrTmp.size(); i++){
+    for (int i = 0; i < slotArrTmp.size(); i++)
+    {
       Slot *slot = slotArrTmp[i];
       std::list<int> listTmp;
-      if(isBaseline)  listTmp = slot->getBaselineInstances();
-      else listTmp = slot->getOptimizedInstances();
-      //当已经插入的inst大于等于2则不考虑了
-      if(listTmp.size() >= 2){
+      if (isBaseline)
+        listTmp = slot->getBaselineInstances();
+      else
+        listTmp = slot->getOptimizedInstances();
+      // 当已经插入的inst大于等于2则不考虑了
+      if (listTmp.size() >= 2)
+      {
         pinNum[i] = -1;
       }
-      else if(listTmp.size() == 1){
+      else if (listTmp.size() == 1)
+      {
         int instIdTmp = listTmp.front();
         Instance *instTmp = glbInstMap[instIdTmp];
         std::set<Net *> netSetTmp = instTmp->getRelatedNets();
-        std::set<int> netIdSetTmp; 
-        for(auto net : netSetTmp){
+        std::set<int> netIdSetTmp;
+        for (auto net : netSetTmp)
+        {
           netIdSetTmp.insert(net->getId());
         }
         // 假设插入当前inst
-        for(int i : netIdSet){
-          netIdSetTmp.insert(i); //重复的会被过滤掉
+        for (int i : netIdSet)
+        {
+          netIdSetTmp.insert(i); // 重复的会被过滤掉
         }
         pinNum[i] = netIdSetTmp.size();
       }
@@ -1025,36 +1038,45 @@ int Tile::findOffset(std::string instTypes, Instance *inst, bool isBaseline)
     // 找到不大于6的最大的引脚的下标
     int maxVal = -1; // 用来存储不大于6的最大数
     int index = -1;  // 用来存储该数的下标
-    for (int i = 0; i < pinNum.size(); ++i) {
-        if (pinNum[i] <= 6 && pinNum[i] > maxVal) {
-            maxVal = pinNum[i];
-            index = i;
-        }
+    for (int i = 0; i < pinNum.size(); ++i)
+    {
+      if (pinNum[i] <= 6 && pinNum[i] > maxVal)
+      {
+        maxVal = pinNum[i];
+        index = i;
+      }
     }
     offset = index;
   }
-  else if(instTypes == "SEQ"){
-    int instID = std::stoi(inst->getInstanceName().substr(5));  // 从第5个字符开始截取，转换为整数
+  else if (instTypes == "SEQ")
+  {
+    int instID = std::stoi(inst->getInstanceName().substr(5)); // 从第5个字符开始截取，转换为整数
     slotArr slotArrTmp = instanceMap[instTypes];
-    for(int j = 0; j < 2; j++){
-      //bank0-1
+    for (int j = 0; j < 2; j++)
+    {
+      // bank0-1
       std::set<int> bankId;
       bankId.insert(instID);
-      for(int i = j*8; i < (j+1)*8; i++){
-        Slot* slotTmp = slotArrTmp[i];
+      for (int i = j * 8; i < (j + 1) * 8; i++)
+      {
+        Slot *slotTmp = slotArrTmp[i];
         std::list<int> instListTmp;
-        if(isBaseline) instListTmp = slotTmp->getBaselineInstances();
-        else instListTmp = slotTmp->getOptimizedInstances();
-        for(int id : instListTmp){
+        if (isBaseline)
+          instListTmp = slotTmp->getBaselineInstances();
+        else
+          instListTmp = slotTmp->getOptimizedInstances();
+        for (int id : instListTmp)
+        {
           bankId.insert(id);
         }
       }
-      //判断每个inst的引脚
-      std::set<int> clkNets; //不超过1
-      std::set<int> ceNets; //不超过2
-      std::set<int> srNets; //不超过1
-      for(int i : bankId){
-        Instance* instPtr = glbInstMap[i];
+      // 判断每个inst的引脚
+      std::set<int> clkNets; // 不超过1
+      std::set<int> ceNets;  // 不超过2
+      std::set<int> srNets;  // 不超过1
+      for (int i : bankId)
+      {
+        Instance *instPtr = glbInstMap[i];
         int numInpins = instPtr->getNumInpins();
         for (int i = 0; i < numInpins; i++)
         {
@@ -1079,24 +1101,29 @@ int Tile::findOffset(std::string instTypes, Instance *inst, bool isBaseline)
         }
       }
 
-      int numClk = clkNets.size();      
-      int numReset = srNets.size();    
+      int numClk = clkNets.size();
+      int numReset = srNets.size();
       int numCe = ceNets.size();
 
-      if (numClk > MAX_TILE_CLOCK_PER_PLB_BANK || numCe > MAX_TILE_CE_PER_PLB_BANK 
-      || numReset > MAX_TILE_RESET_PER_PLB_BANK) {
+      if (numClk > MAX_TILE_CLOCK_PER_PLB_BANK || numCe > MAX_TILE_CE_PER_PLB_BANK || numReset > MAX_TILE_RESET_PER_PLB_BANK)
+      {
         offset = -1;
         return offset;
       }
-      else{
+      else
+      {
         // SEQ只要返回一个空位子即可
         slotArr slotArrTmp = instanceMap[instTypes];
-        for(int i = j*8; i < (j+1)*8; i++){
+        for (int i = j * 8; i < (j + 1) * 8; i++)
+        {
           Slot *slot = slotArrTmp[i];
           std::list<int> listTmp;
-          if(isBaseline)  listTmp = slot->getBaselineInstances();
-          else listTmp = slot->getOptimizedInstances();
-          if(listTmp.size() == 0){
+          if (isBaseline)
+            listTmp = slot->getBaselineInstances();
+          else
+            listTmp = slot->getOptimizedInstances();
+          if (listTmp.size() == 0)
+          {
             offset = i;
             break;
           }
@@ -1275,7 +1302,7 @@ void Instance::calculateAllRelatedNetHPWL(bool isBaseline)
   // 遍历每个相关的net，累加其HPWL
   for (Net *net : relatedNets)
   {
-    // net->setNetHPWL(false);                  // 更新一下net的线长
+    // net->setNetHPWL(isBaseline);                  // 更新一下net的线长
     allRelatedNetHPWL += net->getCritHPWL(); // 累加net的CritHPWL
     allRelatedNetHPWL += net->getHPWL();     // 累加net的HPWL
   }
@@ -1296,15 +1323,15 @@ void Instance::updateInstRelatedNet(bool isBaseline)
   // 遍历每个相关的net，累加其HPWL
   for (Net *net : relatedNets)
   {
-    net->setNetHPWL(false);                  // 更新一下net的线长
+    net->setNetHPWL(isBaseline);             // 更新一下net的线长
     allRelatedNetHPWL += net->getCritHPWL(); // 累加net的CritHPWL
     allRelatedNetHPWL += net->getHPWL();     // 累加net的HPWL
   }
-  // cjq modify 24.10.20 平均
-  if (relatedNets.size() > 0)
-    allRelatedNetHPWLAver = allRelatedNetHPWL / relatedNets.size();
-  else
-    allRelatedNetHPWLAver = 0;
+  // // cjq modify 24.10.20 平均
+  // if (relatedNets.size() > 0)
+  //   allRelatedNetHPWLAver = allRelatedNetHPWL / relatedNets.size();
+  // else
+  //   allRelatedNetHPWLAver = 0;
 }
 
 // 计算instance的可移动区域
