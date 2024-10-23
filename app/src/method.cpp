@@ -39,31 +39,26 @@ int calculateGain(Instance *inst, Tile *newTile, bool isBaseline)
     return originalHPWL - newHPWL;
 }
 
-bool moveInstance(Instance *inst, Tile *newTile, bool isBaseline)
-{
-    int instID = std::stoi(inst->getInstanceName().substr(5));                // 从第5个字符开始截取，转换为整数
-    int offset = newTile->findOffset(inst->getModelName(), inst, isBaseline); // cjq modify 获取合并引脚数不超过6的最大引脚数的插槽位置
-    if (offset == -1)
-    {
-        // std::cout<<"Unable to find any available space to place\n";
-        return false;
+void moveInstance(Instance *inst, Tile *newTile) {
+    Tile *oldTile = chip.getTile(std::get<0>(inst->getLocation()), std::get<1>(inst->getLocation()));
+    if (oldTile != nullptr) {
+        oldTile->removeInstance(inst);  // 从旧Tile中移除inst
     }
-    // 可以进行移动
-    Tile *oldTile = chip.getTile(std::get<0>(inst->getBaseLocation()), std::get<1>(inst->getBaseLocation()));
-    if (oldTile != nullptr)
-    {
-        oldTile->removeInstance(inst); // 从旧Tile中移除inst
+    int instID = std::stoi(inst->getInstanceName().substr(5));  // 从第5个字符开始截取，转换为整数
+    int offset = newTile->findOffset(inst->getModelName(), inst, false); //cjq modify 获取合并引脚数不超过6的最大引脚数的插槽位置
+    if(offset == -1){
+        std::cout<<"Unable to find any available space to place\n";
+        exit(1);
     }
-    newTile->addInstance(instID, offset, inst->getModelName(), isBaseline);          // 将inst添加到新Tile
-    inst->setBaseLocation(std::make_tuple(newTile->getCol(), newTile->getRow(), offset)); // 更新inst的位置
-    return true;
+    newTile->addInstance(instID, offset, inst->getModelName(), false);  // 将inst添加到新Tile
+    inst->setLocation(std::make_tuple(newTile->getCol(), newTile->getRow(), 0));  // 更新inst的位置
 }
 
 void FM()
 {
     std::cout << "--------FM--------" << std::endl;
-    bool isBaseline = false; // 可以根据需求选择是否计算 baseline 状态
-
+    bool isBaseline = true; // 可以根据需求选择是否计算 baseline 状态
+    
     // 统计每个net线长
     for (auto iter : glbNetMap)
     {
@@ -139,11 +134,9 @@ void FM()
         }
 
         // 如果找到最佳位置并且增益为正，则移动inst
-        if (bestTile != nullptr && bestGain > 0)
-        {
-            moveInstance(inst, bestTile, isBaseline);
-            // if(moveInstance(inst, bestTile))
-            //     std::cout << "Moved instance " << inst->getInstanceName() << " to tile " << bestTile->getLocStr() << std::endl;
+        if (bestTile != nullptr && bestGain > 0) {
+            moveInstance(inst, bestTile);
+            std::cout << "Moved instance " << inst->getInstanceName() << " to tile " << bestTile->getLocStr() << std::endl;
         }
     }
 
