@@ -39,3 +39,23 @@ int reportWirelength()
   std::cout << "  Optimized wirelength: total  = " << totalWirelengthOptimized << "; crit = " << totalCritWirelengthOptimized << " (" << std::setprecision(2) << ratioOptimized << "%)" << std::endl;
   return 0;
 }
+
+// cjq modify 获取线长
+int getWirelength(bool isBaseline){  
+  int totalCritWirelength = 0;
+  int totalWirelength = 0;
+  for (auto iter : glbNetMap)
+  {
+    Net *net = iter.second;
+    if (net->isClock())
+    {
+      continue;
+    }
+    totalCritWirelength += net->getCritWireLength(isBaseline);
+    totalWirelength += net->getNonCritWireLength(isBaseline);
+  }
+
+  // append critical wirelength to total wirelength
+  totalWirelength += totalCritWirelength;
+  return totalWirelength;
+}

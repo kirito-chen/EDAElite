@@ -5,4 +5,4 @@
 #include "object.h"
 #include "arch.h"
 
-void SA(bool isBaseline); //
+int SA(bool isBaseline); 

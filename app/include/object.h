@@ -80,7 +80,7 @@ class Tile {
     private:
         int col;
         int row;
-        std::set<std::string> tileTypes;
+        std::set<std::string> tileTypes;  //cjq 包含PLB DSP RAMA IOA等
 
         // container to record instances belone to this tile
         std::map<std::string, slotArr> instanceMap;
@@ -256,7 +256,7 @@ class Instance {
     bool fixed; // 声明 fixed 成员变量
     Lib* cellLib; // 声明 cellLib 成员变量
     std::string instanceName; // 声明 instanceName 成员变量
-    std::string modelName; // 声明 modelName 成员变量
+    std::string modelName; // 声明 modelName 成员变量 LUT SEQ 等
     std::tuple<int, int, int> baseLocation; // location before optimization
     std::tuple<int, int, int> location; // location after optimization
     std::vector<Pin*> inpins;  
