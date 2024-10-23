@@ -9,4 +9,5 @@ void calculateTileRemain();
 void FM();
 void generateOutputFile(const std::string &filename);
 
-void initialPlacement();
+// void initialPlacement();
+void generateOutputFile(const std::string &filename);

@@ -5,8 +5,6 @@ read_design WorkSpace/public/Benchmark/public_release/case_1.nodes WorkSpace/pub
 
 read_output WorkSpace/public/Test/Result/case_1.nodes.out
 
-Initial_Placement
-
 FM
 
 generateResult /home/pc/aibot/wbx/EDAElite/WorkSpace/public/Test/Result/case_1.nodes.out
