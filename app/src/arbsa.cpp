@@ -472,8 +472,8 @@ int arbsa(bool isBaseline){
     sortedFitness(fitnessVec);
 
     // 初始化迭代次数Iter、初始化温度T
-    int Iter = 0, InnerIter = glbNetMap.size()*0.8; //移动百分之八十的net
-    float T = 90, threashhold = 1e-3, alpha = 0.8; //0.8-0.99
+    int Iter = 0, InnerIter = glbNetMap.size()*0.1; //移动百分之八十的net
+    float T = 1, threashhold = 1e-3, alpha = 0.8; //0.8-0.99
     // 计算初始cost
     int cost = 0, costNew = 0;
     cost = getWirelength(isBaseline);
@@ -492,7 +492,7 @@ int arbsa(bool isBaseline){
         // 内层循环 小于内层迭代次数
         while(Iter < InnerIter){
             // 根据fitness列表选择一个net
-            std::cout<<"[INFO] T:"<<std::setw(4)<<std::fixed << std::setprecision(2)<<T <<" iter:"<<std::setw(5)<<Iter<<" cost:"<<std::setw(7)<<cost<<std::endl;
+            std::cout<<"[INFO] T:"<< std::scientific << std::setprecision(3) <<T <<" iter:"<<std::setw(4)<<Iter<<" cost:"<<std::setw(7)<<cost<<std::endl;
             Iter++;
             int netId = selectNetId(fitnessVec);
             #ifdef DEBUG
