@@ -6,3 +6,4 @@ std::map<int, Net*> glbNetMap;
 Arch chip;
 RecSteinerMinTree rsmt;
 std::string lineBreaker = "------------------------------------------";
+

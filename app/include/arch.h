@@ -4,8 +4,8 @@
 #include"object.h"
 
 class Arch {
-    int numCol;
-    int numRow;
+    int numCol; // 150
+    int numRow; //300
     int numClockCol;
     int numClockRow;
     Tile*** tileArray;  //cjq tileArray 的大小是150*300

@@ -1,0 +1,596 @@
+#include <iomanip>
+#include "global.h"
+#include "object.h"
+#include "arbsa.h"
+#include <algorithm>
+#include <cmath>
+#include "wirelength.h"
+#include <random>
+// 计时
+#include <chrono>
+// #define DEBUG
+
+// 全局随机数生成器
+std::mt19937& get_random_engine() {
+    // static std::random_device rd;  // 用于生成种子
+    static std::mt19937 gen; // 使用随机设备生成种子的Mersenne Twister随机数引擎
+    return gen;
+}
+// 设置随机种子
+void set_random_seed(unsigned int seed) {
+    get_random_engine().seed(seed);
+}
+// 生成一个 [min, max] 区间的随机整数
+int generate_random_int(int min, int max) {
+    std::uniform_int_distribution<int> dist(min, max);
+    return dist(get_random_engine());
+}
+// 生成 [min, max] 范围内的随机浮点数
+double generate_random_double(double min, double max) {
+    std::uniform_real_distribution<double> dist(min, max);
+    return dist(get_random_engine());
+}
+
+//计算rangeActulMap
+int calculrangeMap(bool isBaseline, std::map<int, int>& rangeActualMap){
+    for(auto it : glbNetMap){
+        Net *net = it.second;
+        // 访问net input 引脚
+        Instance* instIn = net->getInpin()->getInstanceOwner();
+        int x, y, z;
+        if(isBaseline){
+            std::tie(x, y, z) = instIn->getBaseLocation();
+        }
+        else{
+            std::tie(x, y, z) = instIn->getLocation();
+        }
+        int maxX, minX, maxY, minY;
+        maxX = minX = x;
+        maxY = minY = y;
+        // 访问net output 引脚
+        std::list<Pin*> outputPins = net->getOutputPins();
+        for(Pin *pin : outputPins){
+            Instance* instTmp = pin->getInstanceOwner();
+            if(isBaseline){
+                std::tie(x, y, z) = instTmp->getBaseLocation();
+            }
+            else{
+                std::tie(x, y, z) = instTmp->getLocation();
+            }
+            if(maxX < x) maxX = x;
+            if(minX > x) minX = x;
+            if(maxY < y) maxY = y;
+            if(minY > y) minY = y;
+        }
+        int netDesired = std::ceil((maxX-minX+maxY-minY)/2);
+        rangeActualMap[net->getId()] = netDesired;
+    }
+    return 0;
+}
+
+int calculFitness(std::vector<std::pair<int,float>>& fitnessVec, std::map<int, int>& rangeDesiredMap, std::map<int, int>& rangeActualMap){ 
+    // 计算fitness
+    int n = fitnessVec.size();
+    for(int i = 0; i < n; i++){
+        int netId; 
+        float fitness;
+        std::tie(netId, fitness) = fitnessVec[i];
+        int rangeDesired = rangeDesiredMap[netId];
+        int rangeActual = rangeActualMap[netId];
+        if(rangeDesired == 0 && rangeActual == 0){
+            fitness = 1; //都为0则不考虑移动了，认为为最完美的net
+        }
+        else if(rangeDesired >= rangeActual){
+            fitness = rangeActual / rangeDesired;
+        }
+        else{
+            fitness = rangeDesired / rangeActual;
+        }
+        fitnessVec[i] = std::make_pair(netId, fitness);
+    }
+    return 0;
+}
+
+int sortedFitness(std::vector<std::pair<int,float>>& fitnessVec){ //将fitnessVec按第二个值升序排列
+    std::sort(fitnessVec.begin(), fitnessVec.end(), [](const std::pair<int, float>& a, const std::pair<int, float>& b) {
+        return a.second < b.second; // 按照 float 值从小到大排序
+    });
+    return 0;
+}
+
+int selectNetId(std::vector<std::pair<int,float>>& fitnessVec){ //返回具有一定规律随机选取的net
+    int n = fitnessVec.size();
+    int a = generate_random_int(0, n - 1); // 范围在 0 到 n - 1
+    int b = generate_random_int(0, n - 1);
+    return std::min(a, b);
+}
+
+Instance* selectInst(Net *net){ //返回在net中随机选取的instance指针
+    std::list<Pin*> outputPin = net->getOutputPins();
+    int n = outputPin.size() + 1; // outputpin的数量加一个inputpin
+    Instance* inst = nullptr;
+    std::vector<int> numbers(n); // 0到n-1的数字
+    std::iota(numbers.begin(), numbers.end(), 0); // 填充从0到n的数字
+    while (!numbers.empty()) {
+        int randomIndex = generate_random_int(0, numbers.size() - 1);
+        int index = numbers[randomIndex];
+
+        if(index < outputPin.size()){
+            // 创建一个迭代器指向 list 的开始
+            std::list<Pin*>::iterator it = outputPin.begin();
+            // 使用 std::advance 移动迭代器到指定下标
+            std::advance(it, index);
+            inst = (*it)->getInstanceOwner();
+        }
+        else{ //n-1
+            inst = net->getInpin()->getInstanceOwner();
+        }
+        
+        // 检查是否符合规则
+        if (inst->isFixed()) {
+            // 移除不符合规则的数字
+            numbers.erase(numbers.begin() + randomIndex);
+        } else {
+            break;
+        }
+    }
+    return inst;
+}
+
+std::pair<int,int> getNetCenter(bool isBaseline, Net *net){ //返回net的中心位置
+    int x = 0, y = 0;
+    std::set<int> visitInst; // 记录访问过的inst的id，防止一个inst有多个引脚在同一net且计算多次的情况
+    // 统计inpin
+    Instance* inst = net->getInpin()->getInstanceOwner();
+    int xt, yt, zt;
+    if(isBaseline){
+        std::tie(xt, yt, zt) = inst->getBaseLocation();
+    }
+    else{
+        std::tie(xt, yt, zt) = inst->getLocation();
+    }
+    x += xt;
+    y += yt;
+    //标记为访问过
+    std::string instName = inst->getInstanceName();
+    size_t underscorePos = instName.find('_');
+    if (underscorePos != std::string::npos) {
+      std::string subStr = instName.substr(underscorePos + 1);
+      // Convert the second substring to an integer
+      int instId = std::stoi(subStr);
+      visitInst.insert(instId);
+    }
+    //统计outputpin
+    std::list<Pin*> pinList = net->getOutputPins();
+    for(const auto& pin : pinList){
+        Instance* inst = pin->getInstanceOwner();
+        //判断是否重复出现
+        std::string instName = inst->getInstanceName();
+        size_t underscorePos = instName.find('_');
+        if (underscorePos != std::string::npos) {
+            std::string subStr = instName.substr(underscorePos + 1);
+            // Convert the second substring to an integer
+            int instId = std::stoi(subStr);
+            auto it = visitInst.find(instId);
+            if (it != visitInst.end()) {
+                //重复的inst，跳过
+                continue;
+            }  
+            else visitInst.insert(instId);
+        }
+        if(isBaseline){
+            std::tie(xt, yt, zt) = inst->getBaseLocation();
+        }
+        else{
+            std::tie(xt, yt, zt) = inst->getLocation();
+        }
+        x += xt;
+        y += yt;
+    }
+    // 取平均值
+    x = x / visitInst.size();
+    y = y / visitInst.size();
+    return std::make_pair(x, y);
+}
+
+bool isValid(bool isBaseline, int x, int y, int& z, Instance* inst){ //判断这个位置是否是PLB，以及是否可插入该inst，如果可插入则返回z值
+    bool valid = false;
+    Tile* tile = chip.getTile(x, y);
+    if(tile == NULL || tile->matchType("PLB") == false){
+        return false;
+    }
+    std::string instType = inst->getModelName();
+    std::string instName = inst->getInstanceName();
+    int instId = std::stoi(inst->getInstanceName().substr(5));  // inst_xxx 从第5个字符开始截取，转换为整数
+    if(instType.substr(0,3) == "LUT"){
+        std::vector<int> hasDRAM(2, 0); //  1 表示有DRAM
+        //先判断是否有DRAM
+        slotArr dramSlotArr = *(tile->getInstanceByType("DRAM"));
+        slotArr lutSlotArr = *(tile->getInstanceByType("LUT"));
+        int lutBegin = 0, lutEnd = 0;
+        for (int idx = 0; idx < (int)dramSlotArr.size(); idx++) {
+            Slot* slot = dramSlotArr[idx];
+            if (slot == nullptr) {
+                continue;
+            }
+            std::list<int> instances;
+            if (isBaseline) {
+                instances = slot->getBaselineInstances();
+            } else {
+                instances = slot->getOptimizedInstances();
+            }
+            if (instances.empty()) {
+                continue;
+            } 
+            // DRAM at slot0 blocks lut slot 0~3
+            // DRAM at slot1 blocks lut slot 4~7
+            hasDRAM[idx] = 1;
+        }
+        if(hasDRAM[0] & hasDRAM[1]){
+            //两个都是DRAM，不可放置
+            return false;
+        }
+        // 0-3不可放
+        else if(hasDRAM[0]){
+            lutBegin = 4;
+            lutEnd = 8;
+        }
+        // 4-7不可放
+        else if(hasDRAM[1]){
+            lutBegin = 0;
+            lutEnd = 4;
+        }
+        // 都可以放
+        else{
+            lutBegin = 0;
+            lutEnd = 8;
+        }
+        std::vector<int> record(8,0);
+        for (int idx = lutBegin; idx < lutEnd; idx++) {
+            Slot* slot = lutSlotArr[idx];
+            if (slot == nullptr) {
+                continue;
+            }
+            std::list<int> instances;
+            if (isBaseline) {
+                instances = slot->getBaselineInstances();
+            } else {
+                instances = slot->getOptimizedInstances();
+            }
+            if(instances.size() > 1){
+                //大于1个lut，不可放入了
+                continue;
+            }
+            else{
+                instances.push_back(instId); //添加当前instId
+                std::set<int> totalInputs;
+                for (auto instID : instances) {
+                    Instance* instPtr = glbInstMap.find(instID)->second;
+                    std::vector<Pin*> inpins = instPtr->getInpins();
+                    for (auto pin : inpins) {
+                        if (pin->getNetID() != -1) {
+                        totalInputs.insert(pin->getNetID());
+                        }
+                    }
+                }
+                if (totalInputs.size() <= 6) {
+                    //符合条件 记录
+                    record[idx] = totalInputs.size();
+                }
+            }
+        }
+        int maxRecord = -1;
+        int maxIdx = -1;
+        // 找到小于等于6个引脚的最大引脚位置
+        for (int idx = lutBegin; idx < lutEnd; idx++) {
+            if(record[idx] <= 6 && record[idx] > maxRecord){
+                maxRecord = record[idx];
+                maxIdx = idx;
+            }
+        }
+        if(maxIdx != -1){
+            z = maxIdx;
+            return true;
+        }
+    }
+    else if(inst->getModelName() == "SEQ"){
+        slotArr seqSlotArr = *(tile->getInstanceByType("SEQ"));
+        for (int bank = 0; bank < 2; bank++) {
+            // bank0 0-8   bank1 8-16
+            int start = bank * 8;
+            int end = (bank + 1) * 8;
+            std::set<int> instIdSet;
+            instIdSet.insert(instId); // 添加当前Id
+            for(int i = start; i < end; i++){
+                Slot* slot = seqSlotArr[i];
+                std::list<int> instList;
+                if(isBaseline) instList = slot->getBaselineInstances();
+                else instList = slot->getOptimizedInstances();
+                for(int id : instList){
+                    instIdSet.insert(id);
+                }
+            }
+            //判断每个inst的引脚
+            std::set<int> clkNets; //不超过1
+            std::set<int> ceNets; //不超过2
+            std::set<int> srNets; //不超过1
+            for(int i : instIdSet){
+                Instance* instPtr = glbInstMap[i];
+                int numInpins = instPtr->getNumInpins();
+                for (int i = 0; i < numInpins; i++) {
+                    //只判断input是否是这几个量
+                    Pin *pin = instPtr->getInpin(i);
+                    int netID = pin->getNetID();
+                    if (netID >= 0) {
+                        PinProp prop = pin->getProp();
+                        if (prop == PIN_PROP_CE){
+                            ceNets.insert(netID);
+                        } else if (prop == PIN_PROP_CLOCK) {
+                            clkNets.insert(netID);
+                        } else if (prop == PIN_PROP_RESET) {
+                            srNets.insert(netID);
+                        }
+                    }
+                }
+            }
+
+            int numClk = clkNets.size();      
+            int numReset = srNets.size();    
+            int numCe = ceNets.size();
+            
+            if (numClk > MAX_TILE_CLOCK_PER_PLB_BANK || numCe > MAX_TILE_CE_PER_PLB_BANK || numReset > MAX_TILE_RESET_PER_PLB_BANK) {
+                //该bank放入该inst时违反约束
+                valid = false;
+            }
+            else{
+                // SEQ只要返回一个空位子即可
+                slotArr seqSlotArr = *(tile->getInstanceByType("SEQ"));
+                for(int i = start; i < end; i++){
+                    Slot *slot = seqSlotArr[i];
+                    std::list<int> listTmp;
+                    if(isBaseline)  listTmp = slot->getBaselineInstances();
+                    else listTmp = slot->getOptimizedInstances();
+                    if(listTmp.size() == 0){
+                        z = i;
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+
+    return valid;
+}
+
+std::tuple<int,int,int> findSuitableLoc(bool isBaseline, int x, int y, int rangeDesired, Instance* inst){
+  
+    // 定义矩形框的左下角和右上角
+    int xl = x - rangeDesired, yl = y - rangeDesired, xr = x + rangeDesired, yr = y + rangeDesired;
+    // 判断不超出范围
+    if(xl < 0) xl = 0;
+    if(yl < 0) yl = 0;
+    if(xr > 150) xr = 150;
+    if(yr > 150) yr = 150;
+
+    // 生成矩形框内的所有坐标
+    std::vector<std::pair<int, int>> coordinates;
+    for (int x = xl; x <= xr; ++x) {
+        for (int y = yl; y <= yr; ++y) {
+            coordinates.emplace_back(x, y); // 将坐标 (x, y) 加入向量
+        }
+    }
+    int xx, yy, zz = -1; //目标坐标
+    int xCur, yCur, zCur; //当前坐标
+    //目前inst所在位置
+    if(isBaseline) std::tie(xCur, yCur, zCur) = inst->getBaseLocation();
+    else std::tie(xCur, yCur, zCur) = inst->getLocation();
+
+    // 进行随机抽取
+    while (!coordinates.empty()) {
+        int randomIndex = generate_random_int(0, coordinates.size() - 1);;
+        xx = coordinates[randomIndex].first;
+        yy = coordinates[randomIndex].second;
+        #ifdef DEBUG
+            std::cout << "DEBUG-Selected target coordinates: (" << xx << ", " << yy << ")" << std::endl;
+        #endif
+        if(xCur == xx && yCur == yy){
+            #ifdef DEBUG
+                std::cout << "DEBUG-The coordinates (" << xx << ", " << yy << ") are consistent with the original coordinates (" << xCur << ", " << yCur << ")"<< std::endl;
+            #endif
+            // 移除不符合规则的坐标
+            coordinates.erase(coordinates.begin() + randomIndex);
+            continue;
+        }
+        // 检查坐标是否符合规则
+        if (isValid(isBaseline, xx, yy, zz, inst)) {
+            break;
+        } else {
+            #ifdef DEBUG
+                std::cout << "DEBUG-The coordinates (" << xx << ", " << yy << ") do not conform to the constraints" << std::endl;
+            #endif
+            // 移除不符合规则的坐标
+            coordinates.erase(coordinates.begin() + randomIndex);
+        }
+    }
+    return {xx, yy, zz};
+}
+
+int changeTile(bool isBaseline, std::tuple<int, int, int> originLoc, std::tuple<int, int, int> loc, Instance* inst){
+    int xCur, yCur, zCur, xGoal, yGoal, zGoal;
+    std::tie(xCur, yCur, zCur) = originLoc;
+    std::tie(xGoal, yGoal, zGoal) = loc;
+    Tile* tileCur = chip.getTile(xCur, yCur);
+    Tile* tileGoal = chip.getTile(xGoal, yGoal);
+    int instId = std::stoi(inst->getInstanceName().substr(5));  // inst_xxx 从第5个字符开始截取，转换为整数
+    //删除旧的tile插槽中的inst
+    slotArr *slotArrCur = tileCur->getInstanceByType(inst->getModelName().substr(0,3)); //LUT or SEQ
+    Slot* slot = slotArrCur->at(zCur);
+    std::list<int> instances;
+    if (isBaseline) {
+        instances = slot->getBaselineInstances();
+    } else {
+        instances = slot->getOptimizedInstances();
+    }
+    for(int instIdTmp : instances){
+        if(instId == instIdTmp){
+            instances.remove(instIdTmp);
+            break;
+        }
+    }
+
+    //在新的插槽中插入
+    slotArr slotArrGoal = *(tileGoal->getInstanceByType(inst->getModelName().substr(0,3)));
+    Slot* slotGoal = slotArrGoal[zGoal];
+    if (isBaseline) {
+        instances = slotGoal->getBaselineInstances();
+    } else {
+        instances = slotGoal->getOptimizedInstances();
+    }
+    instances.emplace_back(instId);
+
+    return 0;
+}
+
+int arbsa(bool isBaseline){
+    // 记录开始时间
+    auto start = std::chrono::high_resolution_clock::now();
+    // 初始布局
+    
+    // 构造 fitness 优先级列表 初始化 rangeDesired  
+    std::vector<std::pair<int,float>> fitnessVec; // 第一个是netId，第二个是适应度fitness, 适应度越小表明越需要移动。后续会按照fitness升序排列
+    std::map<int, int> rangeDesiredMap; // 第一个是netId，第二个是外框矩形的平均跨度，即半周线长的一半
+    calculrangeMap(isBaseline, rangeDesiredMap);
+    for(auto it : glbNetMap){
+        Net *net = it.second;
+        //构造fitnessVec
+        fitnessVec.emplace_back(std::make_pair(net->getId(), 0));
+    }
+    std::map<int, int> rangeActualMap(rangeDesiredMap); // 第一个是netId，第二个是当前实际的外框矩形的平均跨度，即半周线长的一半
+    
+    // 计算 fitness 并 排序
+    calculFitness(fitnessVec, rangeDesiredMap, rangeActualMap);
+    sortedFitness(fitnessVec);
+
+    // 初始化迭代次数Iter、初始化温度T
+    int Iter = 0, InnerIter = glbNetMap.size()*0.8; //移动百分之八十的net
+    float T = 90, threashhold = 1e-3, alpha = 0.8; //0.8-0.99
+    // 计算初始cost
+    int cost = 0, costNew = 0;
+    cost = getWirelength(isBaseline);
+    //自适应参数
+    int counterNet = 0;
+    const int counterNetLimit = 100;
+    const int seed = 999;
+    set_random_seed(seed);
+    
+    std::cout<<"------------------------------------------------\n";
+    std::cout<<"[INFO] The simulated annealing algorithm starts "<< std::endl;
+    std::cout<<"[INFO] initial temperature T= "<< T <<", threshhold= "<<threashhold<<", alpha= "<<alpha<< ", InnerIter= "<<InnerIter<<", seed"<<seed<<std::endl;
+
+    // 外层循环 温度大于阈值， 更新一次fitness优先级列表
+    while(T > threashhold){
+        // 内层循环 小于内层迭代次数
+        while(Iter < InnerIter){
+            // 根据fitness列表选择一个net
+            std::cout<<"[INFO] T:"<<std::setw(4)<<std::fixed << std::setprecision(2)<<T <<" iter:"<<std::setw(5)<<Iter<<" cost:"<<std::setw(7)<<cost<<std::endl;
+            Iter++;
+            int netId = selectNetId(fitnessVec);
+            #ifdef DEBUG
+                std::cout<<"DEBUG-netId:"<<netId<<std::endl;
+            #endif
+            Net* net = glbNetMap[netId];
+            // 随机选择net中的一个inst  
+            Instance* inst = selectInst(net);
+            if(inst == nullptr){
+                // 没找到可移动的inst，跳过后续部分
+                continue;
+            }
+            #ifdef DEBUG
+                std::cout<<"DEBUG-instName:"<<inst->getInstanceName()<<std::endl;
+            #endif
+            // 确定net的中心  
+            int centerX, centerY;
+            std::tie(centerX, centerY) = getNetCenter(isBaseline, net);
+            // 在 rangeDesired 范围内选取一个位置去放置这个inst 
+            int x, y, z;
+            std::tie(x, y, z) = findSuitableLoc(isBaseline, centerX, centerY, rangeDesiredMap[netId], inst);
+            if(z == -1){
+                // 没找到合适位置
+                continue;
+            }
+            
+            // 计算移动后的newCost
+            std::tuple<int, int, int> loc = std::make_tuple(x, y, z);
+            std::tuple<int, int, int> originLoc;
+            if(isBaseline){
+                originLoc = inst->getBaseLocation();
+                inst->setBaseLocation(loc);
+            }
+            else{
+                originLoc = inst->getLocation();
+                inst->setLocation(loc);
+            }
+            costNew = getWirelength(isBaseline);
+            // deta = new_cost - cost
+            int deta = costNew - cost;
+            #ifdef DEBUG
+                std::cout<<"DEBUG-deta:"<<deta<<std::endl;
+            #endif
+            // if deta < 0 更新这个操作到布局中，更新fitness列表
+            if(deta < 0){
+                changeTile(isBaseline, originLoc, loc, inst);
+                calculrangeMap(isBaseline, rangeActualMap);
+                calculFitness(fitnessVec, rangeDesiredMap, rangeActualMap);
+                cost = costNew;
+                // sortedFitness(fitnessVec);
+            }
+            else{
+                // else 取(0,1)随机数，判断随机数是否小于 e^(-deta/T) 是则同样更新操作，更新fitness列表
+
+                // 生成一个 0 到 1 之间的随机浮点数
+                double randomValue = generate_random_double(0.0, 1.0);
+                double eDetaT = exp(-deta/T);
+                #ifdef DEBUG
+                    std::cout<<"DEBUG-randomValue:"<<randomValue<<", eDetaT:"<<eDetaT<<std::endl;
+                #endif
+                if(randomValue < eDetaT){
+                    changeTile(isBaseline, originLoc, loc, inst);
+                    calculrangeMap(isBaseline, rangeActualMap);
+                    calculFitness(fitnessVec, rangeDesiredMap, rangeActualMap);
+                    cost = costNew;
+                }
+                else{ //复原
+                    if(isBaseline){
+                        inst->setBaseLocation(originLoc);
+                    } else{
+                        inst->setLocation(originLoc);
+                    }
+                }
+            }
+            // counterNet 计数+1
+            counterNet += 1;
+            // 当计数等于一个限制时，更新rangeActual 到 rangeDesired
+            if(counterNet == counterNetLimit){
+                rangeDesiredMap = rangeActualMap;
+                counterNet = 0;
+            }
+            
+        }
+        // T = alpha * T
+        T = alpha * T;
+        // Iter = 0
+        Iter = 0;
+        // 排序fitness列表
+        sortedFitness(fitnessVec);
+    }
+    
+    // 记录结束时间
+    auto end = std::chrono::high_resolution_clock::now();
+
+    // 计算运行时间
+    std::chrono::duration<double> duration = end - start;
+
+    // 输出运行时间（单位为秒）
+    std::cout << "runtime: " << duration.count() << " s" << std::endl;
+    return 0;
+}

@@ -14,7 +14,7 @@
 #include "rsmt.h"
 #include "method.h"
 #include "test.h"
-#include "sa.h"
+#include "arbsa.h"
 
 int main(int argc, char *argv[])
 {
@@ -226,7 +226,7 @@ int main(int argc, char *argv[])
         }
         else if (tokens[0] == "SA")
         {
-            SA(true);
+            arbsa(true);
         }
         else if (tokens[0] == "exit")
         {
