@@ -1192,6 +1192,7 @@ Instance::Instance()
   setLocation(std::make_tuple(-1, -1, -1));
   setBaseLocation(std::make_tuple(-1, -1, -1));
   movableRegion.assign(4, -1);
+  isMatch = false;
 }
 
 bool Instance::isPlaced()

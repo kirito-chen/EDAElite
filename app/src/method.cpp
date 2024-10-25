@@ -15,6 +15,7 @@
 
 // 共享数据结构的锁
 std::mutex lutMutex;
+std::unordered_set<int> matchedLUTs; // 存储已匹配的 LUT IDs
 
 // 检查实例是否为 LUT 类型
 bool isLUTType(const std::string &modelName) {
@@ -353,7 +354,7 @@ void matchLUTPairs11(std::map<int, Instance *> &glbInstMap)
 }
 
 
-// 匹配LUT对的多线程函数
+// 修改后的匹配LUT对的多线程函数
 void matchLUTPairsThread(std::map<int, Instance *> &glbInstMap, std::vector<int> &unmatchedLUTs, 
                          std::unordered_map<int, std::unordered_set<int>> &lutNetMap, 
                          std::unordered_map<int, std::unordered_set<int>> &netLUTMap, int start, int end)
@@ -363,48 +364,46 @@ void matchLUTPairsThread(std::map<int, Instance *> &glbInstMap, std::vector<int>
         int bestMatchedLUTID = -1;
         int maxSharedNets = -1;
 
-        // 从当前线程处理的unmatchedLUTs中选择一个LUT
         int currentLUTID = unmatchedLUTs[start];
         Instance *currentLUT = glbInstMap[currentLUTID];
 
-        // 获取当前LUT的所有连接net（只考虑输入引脚）
+        // 检查当前 LUT 是否已被匹配
+        {
+            std::lock_guard<std::mutex> lock(lutMutex);
+            if (matchedLUTs.find(currentLUTID) != matchedLUTs.end()) {
+                ++start; // 跳过已匹配的 LUT
+                continue;
+            }
+        }
+
         const auto &currentLUTNets = lutNetMap[currentLUTID];
 
-        // 遍历这些net，找到所有与该net共享的LUT
         for (int netID : currentLUTNets)
         {
             const auto &relatedLUTs = netLUTMap[netID];
 
             for (int otherLUTID : relatedLUTs)
             {
-                if (otherLUTID == currentLUTID)
-                {
-                    continue; // 跳过自己
-                }
+                if (otherLUTID == currentLUTID) continue;
 
                 Instance *otherLUT = glbInstMap[otherLUTID];
 
-                if (otherLUT->isFixed()) // 跳过固定的LUT
                 {
-                    continue;
+                    std::lock_guard<std::mutex> lock(lutMutex);
+                    if (matchedLUTs.find(otherLUTID) != matchedLUTs.end()) continue;
                 }
 
-                // 计算共享net数量
                 const auto &otherLUTNets = lutNetMap[otherLUTID];
                 int sharedNetCount = 0;
-                for (int net : currentLUTNets)
-                {
-                    if (otherLUTNets.find(net) != otherLUTNets.end())
-                    {
+                for (int net : currentLUTNets) {
+                    if (otherLUTNets.find(net) != otherLUTNets.end()) {
                         sharedNetCount++;
                     }
                 }
 
-                // 使用 unionSets 计算合并后的引脚数量
                 std::unordered_set<int> unionPins = unionSets(currentLUTNets, otherLUTNets);
                 int totalInpins = unionPins.size();
 
-                // 更新最佳匹配
                 if (sharedNetCount > maxSharedNets && totalInpins <= 6)
                 {
                     maxSharedNets = sharedNetCount;
@@ -413,12 +412,17 @@ void matchLUTPairsThread(std::map<int, Instance *> &glbInstMap, std::vector<int>
             }
         }
 
-        // 如果找到最佳匹配，则进行标记（需要加锁）
         if (bestMatchedLUTID != -1)
         {
-            std::lock_guard<std::mutex> lock(lutMutex); // 加锁保护共享数据
-            currentLUT->setMatchedLUTID(bestMatchedLUTID);
-            glbInstMap[bestMatchedLUTID]->setMatchedLUTID(currentLUTID);
+            std::lock_guard<std::mutex> lock(lutMutex);
+            if (matchedLUTs.find(currentLUTID) == matchedLUTs.end() && 
+                matchedLUTs.find(bestMatchedLUTID) == matchedLUTs.end())
+            {
+                matchedLUTs.insert(currentLUTID);
+                matchedLUTs.insert(bestMatchedLUTID);
+                currentLUT->setMatchedLUTID(bestMatchedLUTID);
+                glbInstMap[bestMatchedLUTID]->setMatchedLUTID(currentLUTID);
+            }
         }
 
         ++start;
@@ -437,8 +441,8 @@ void matchLUTPairs(std::map<int, Instance *> &glbInstMap)
         int instID = instPair.first;
         Instance *inst = instPair.second;
 
-        // 跳过固定的实例或类型不是以 "LUT" 开头的实例
-        if (inst->isFixed() || !isLUTType(inst->getModelName()))
+        // 跳过类型不是以 "LUT" 开头的实例
+        if (!isLUTType(inst->getModelName()))
         {
             continue;
         }

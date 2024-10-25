@@ -6,6 +6,14 @@
 #include "lib.h"
 #include "arch.h"
 #include "rsmt.h"
+#include <map>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
+#include <set>
+#include <algorithm>
+#include <mutex>
+#include <thread>
 
 // global variables
 extern std::map<std::string, Lib*> glbLibMap;
