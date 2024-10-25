@@ -16,6 +16,8 @@
 #include "test.h"
 #include "sa.h"
 
+#include <chrono>
+
 int main(int argc, char *argv[])
 {
     if (argc != 2)
@@ -239,10 +241,20 @@ int main(int argc, char *argv[])
         {
             calculateTileRemain();
             reportWirelength();
-            for (size_t i = 0; i < 1; i++)
+            for (size_t i = 0; i < 4; i++)
             {
                 std::cout << "第" << i + 1 << "次迭代";
+
+                // 获取开始时间
+                auto start = std::chrono::high_resolution_clock::now();
+
                 FM();
+
+                // 获取结束时间
+                auto end = std::chrono::high_resolution_clock::now();
+                std::chrono::duration<double> duration = end - start;
+                std::cout << "第" << i + 1 << "次迭代FM程序运行时间: " << duration.count() << " 秒" << std::endl;
+
                 reportWirelength();
             }
         }
@@ -266,6 +278,17 @@ int main(int argc, char *argv[])
             break;
         }
         std::cout << std::endl;
+    }
+
+    matchLUTPairs(glbInstMap);
+
+    // 检测数据
+    for (auto &inst : glbInstMap)
+    {
+        if (inst.first == 122875)
+        {
+            std::cout << lineBreaker << std::endl;
+        }
     }
 
     //-------------------测试---------------

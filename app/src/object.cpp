@@ -478,7 +478,7 @@ bool Tile::removeInstance(Instance *inst)
     }
   }
 
-  std::cout << "Error: Instance not found in tile" << std::endl;
+  // std::cout << "Error: Instance not found in tile" << std::endl;
   return false; // 未找到实例，返回false
 }
 

@@ -266,10 +266,15 @@ class Instance {
     int allRelatedNetHPWLAver;  //cjq modify 24.10.20 平均HPWL
 
     std::vector<int> movableRegion; //wbx，inst的可移动区域，由inst的net最小外包矩形给出
+    int matchedLUTID; // 用于存储与当前LUT匹配的LUT实例ID
 
 public:
     Instance(); 
     ~Instance();
+    
+    // 添加 Getter 和 Setter 函数
+    int getMatchedLUTID() const { return matchedLUTID; }
+    void setMatchedLUTID(int lutID) { matchedLUTID = lutID; }
 
     // Getter and setter
     std::tuple<int, int, int> getBaseLocation() const { return baseLocation; }
