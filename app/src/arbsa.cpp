@@ -31,6 +31,25 @@ double generate_random_double(double min, double max) {
     return dist(get_random_engine());
 }
 
+//计算标准差
+double calculateStandardDeviation(const std::vector<int>& data) {
+    if (data.empty()) {
+        return 0.0; // 如果数据为空，返回0或处理异常
+    }
+    
+    // 计算平均值
+    double mean = std::accumulate(data.begin(), data.end(), 0.0) / data.size();
+    
+    // 计算每个元素与平均值的差值的平方和
+    double variance = 0.0;
+    for (int value : data) {
+        variance += (value - mean) * (value - mean);
+    }
+    
+    // 方差除以数据数量并开平方得到标准差
+    return std::sqrt(variance / data.size());
+}
+
 //计算rangeActulMap
 int calculrangeMap(bool isBaseline, std::map<int, int>& rangeActualMap){
     for(auto it : glbNetMap){
@@ -472,8 +491,8 @@ int arbsa(bool isBaseline){
     sortedFitness(fitnessVec);
 
     // 初始化迭代次数Iter、初始化温度T
-    int Iter = 0, InnerIter = glbNetMap.size()*0.1; //移动百分之八十的net
-    float T = 1, threashhold = 1e-3, alpha = 0.8; //0.8-0.99
+    int Iter = 0, InnerIter = int( pow(glbInstMap.size(),4/3) ); 
+    float T = 1, threashhold = 1e-5, alpha = 0.8; //0.8-0.99
     // 计算初始cost
     int cost = 0, costNew = 0;
     cost = getWirelength(isBaseline);
@@ -482,17 +501,66 @@ int arbsa(bool isBaseline){
     const int counterNetLimit = 100;
     const int seed = 999;
     set_random_seed(seed);
+
+    std::vector<int> sigmaVecInit;
+    //根据标准差设置初始温度
+    for(int i = 0; i < 50; i++){
+        //计算50次步骤取方差
+        int netId = selectNetId(fitnessVec);
+        Net* net = glbNetMap[netId];
+        Instance* inst = selectInst(net);
+        if(inst == nullptr){
+            // 没找到可移动的inst，跳过后续部分
+            continue;
+        }
+        int centerX, centerY;
+        std::tie(centerX, centerY) = getNetCenter(isBaseline, net);
+        int x, y, z;
+        std::tie(x, y, z) = findSuitableLoc(isBaseline, centerX, centerY, rangeDesiredMap[netId], inst);
+        if(z == -1){
+            // 没找到合适位置
+            continue;
+        }
+        // 计算移动后的newCost
+        std::tuple<int, int, int> loc = std::make_tuple(x, y, z);
+        std::tuple<int, int, int> originLoc;
+        if(isBaseline){
+            originLoc = inst->getBaseLocation();
+            inst->setBaseLocation(loc);
+        }
+        else{
+            originLoc = inst->getLocation();
+            inst->setLocation(loc);
+        }
+        costNew = getWirelength(isBaseline);
+        if(costNew < cost){
+            sigmaVecInit.emplace_back(costNew);
+        }
+        //复原
+        if(isBaseline){
+            inst->setBaseLocation(originLoc);
+        } else{
+            inst->setLocation(originLoc);
+        }
+    }
+
+    //计算标准差
+    double standardDeviation = calculateStandardDeviation(sigmaVecInit);
+    std::cout << "[INFO] Standard Deviation: " << standardDeviation << std::endl;
+    T = 0.5 * standardDeviation;
     
     std::cout<<"------------------------------------------------\n";
     std::cout<<"[INFO] The simulated annealing algorithm starts "<< std::endl;
-    std::cout<<"[INFO] initial temperature T= "<< T <<", threshhold= "<<threashhold<<", alpha= "<<alpha<< ", InnerIter= "<<InnerIter<<", seed"<<seed<<std::endl;
+    std::cout<<"[INFO] initial temperature T= "<< T <<", threshhold= "<<threashhold<<", alpha= "<<alpha<< ", InnerIter= "<<InnerIter<<", seed="<<seed<<std::endl;
 
     // 外层循环 温度大于阈值， 更新一次fitness优先级列表
     while(T > threashhold){
+        //记录接受的new_cost
+        std::vector<int> sigmaVec; 
         // 内层循环 小于内层迭代次数
         while(Iter < InnerIter){
             // 根据fitness列表选择一个net
-            std::cout<<"[INFO] T:"<< std::scientific << std::setprecision(3) <<T <<" iter:"<<std::setw(4)<<Iter<<" cost:"<<std::setw(7)<<cost<<std::endl;
+            std::cout<<"[INFO] T:"<< std::scientific << std::setprecision(3) <<T <<" iter:"<<std::setw(4)<<Iter<<" alpha:"<<std::fixed<<std::setprecision(2)<<alpha<<" cost:"<<std::setw(7)<<cost<<std::endl;
             Iter++;
             int netId = selectNetId(fitnessVec);
             #ifdef DEBUG
@@ -542,6 +610,7 @@ int arbsa(bool isBaseline){
                 calculrangeMap(isBaseline, rangeActualMap);
                 calculFitness(fitnessVec, rangeDesiredMap, rangeActualMap);
                 cost = costNew;
+                sigmaVec.emplace_back(costNew);
                 // sortedFitness(fitnessVec);
             }
             else{
@@ -558,6 +627,7 @@ int arbsa(bool isBaseline){
                     calculrangeMap(isBaseline, rangeActualMap);
                     calculFitness(fitnessVec, rangeDesiredMap, rangeActualMap);
                     cost = costNew;
+                    sigmaVec.emplace_back(costNew);
                 }
                 else{ //复原
                     if(isBaseline){
@@ -576,6 +646,18 @@ int arbsa(bool isBaseline){
             }
             
         }
+        
+        double acceptRate = sigmaVec.size() / InnerIter;
+        if(0.96 <= acceptRate){
+            alpha = 0.5;
+        } else if(0.8 <= acceptRate && acceptRate < 0.96){
+            alpha = 0.9;
+        } else if(0.16 <= acceptRate && acceptRate < 0.8 ){
+            alpha = 0.95;
+        } else{
+            alpha = 0.8;
+        }
+
         // T = alpha * T
         T = alpha * T;
         // Iter = 0
