@@ -1,11 +1,11 @@
 read_arch WorkSpace/public/Arch/fpga.lib WorkSpace/public/Arch/fpga.scl WorkSpace/public/Arch/fpga.clk
 report_arch
 
-read_design WorkSpace/public/Benchmark/public_release/case_5.nodes WorkSpace/public/Benchmark/public_release/case_5.nets WorkSpace/public/Benchmark/public_release/case_5.timing
+read_design WorkSpace/public/Benchmark/public_release/case_10.nodes WorkSpace/public/Benchmark/public_release/case_10.nets WorkSpace/public/Benchmark/public_release/case_10.timing
 
 report_design 
 
-read_output WorkSpace/public/Test/Result/case_5.nodes.out
+read_output WorkSpace/public/Test/Result/case_10.nodes.out
 
 
 legal_check
