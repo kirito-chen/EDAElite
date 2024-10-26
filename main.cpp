@@ -281,11 +281,13 @@ int main(int argc, char *argv[])
     }
 
     matchLUTPairs(glbInstMap);
+    size_t mapSize = lutGroups.size();
+    std::cout << "Map size: " << mapSize << std::endl;
 
     // 检测数据
     for (auto &inst : glbInstMap)
     {
-        if (inst.first == 520)
+        if (inst.first == 43907)
         {
             std::cout << lineBreaker << std::endl;
         }
@@ -302,8 +304,8 @@ int main(int argc, char *argv[])
     //     FM();
     //     reportWirelength();
     // }
-
-    // result = legalCheck();
+    reportWirelength();
+    result = legalCheck();
 
     // free memory before exit
     for (auto &lib : glbLibMap)

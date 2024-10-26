@@ -274,6 +274,8 @@ public:
     Instance(); 
     ~Instance();
 
+    void modifyFixed(bool _fix){fixed = _fix;}
+
     bool isMatched(){return isMatch;}
 
     // 添加 Getter 和 Setter 函数

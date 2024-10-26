@@ -11,20 +11,76 @@
 #include <thread>
 #include <mutex>
 
+bool isLUTType(const std::string &modelName);
 
+// 定义新的实例ID生成器
+int generateNewInstanceID()
+{
+    static int newID = 0;
+    return newID++;
+}
 
 // 共享数据结构的锁
 std::mutex lutMutex;
 std::unordered_set<int> matchedLUTs; // 存储已匹配的 LUT IDs
 
+void populateLUTGroups(std::map<int, Instance *> &glbInstMap) {
+    for (const auto &instPair : glbInstMap) {
+        int instID = instPair.first;
+        Instance *inst = instPair.second;
+
+        // 跳过非LUT的实例
+        if (!isLUTType(inst->getModelName())) {
+            continue;
+        }
+
+        // 检查实例的 matchedLUTID
+        int matchedID = inst->getMatchedLUTID();
+        
+        if (matchedID == -1) {
+            // 实例未匹配，作为单个 LUT 插入 lutGroups
+            int newInstanceID = generateNewInstanceID();
+            lutGroups[newInstanceID] = {inst};
+        }
+    }
+}
+
+// 如果组内有一个固定的LUT且另一个是非固定的LUT，则更新非固定LUT的位置
+void refreshLUTGroups(std::map<int, std::set<Instance*>> &lutGroups) {
+    for (auto &groupPair : lutGroups) {
+        auto &lutGroup = groupPair.second;
+        
+        // 检查组内是否有固定的LUT
+        Instance *fixedLUT = nullptr;
+        Instance *movableLUT = nullptr;
+
+        for (Instance *lut : lutGroup) {
+            if (lut->isFixed()) {
+                fixedLUT = lut;
+            } else {
+                movableLUT = lut;
+            }
+        }
+
+        // 如果组内有一个固定的LUT且另一个是非固定的LUT，则更新非固定LUT的位置并固定LUT
+        if (fixedLUT && movableLUT) {
+            movableLUT->setLocation(fixedLUT->getLocation());
+            movableLUT->modifyFixed(true);
+        }
+    }
+}
+
+
 // 检查实例是否为 LUT 类型
-bool isLUTType(const std::string &modelName) {
+bool isLUTType(const std::string &modelName)
+{
     return modelName.rfind("LUT", 0) == 0; // 确认modelName以"LUT"开头
 }
 
 // 计算两个 unordered_set 的并集
-std::unordered_set<int> unionSets(const std::unordered_set<int>& set1, const std::unordered_set<int>& set2) {
-    std::unordered_set<int> result(set1); // 先将 set1 拷贝到结果集合中
+std::unordered_set<int> unionSets(const std::unordered_set<int> &set1, const std::unordered_set<int> &set2)
+{
+    std::unordered_set<int> result(set1);    // 先将 set1 拷贝到结果集合中
     result.insert(set2.begin(), set2.end()); // 插入 set2 的所有元素，重复的元素会自动忽略
     return result;
 }
@@ -282,9 +338,8 @@ void matchLUTPairs11(std::map<int, Instance *> &glbInstMap)
     }
 
     // 按引脚数量从多到少排序 unmatchedLUTs
-    std::sort(unmatchedLUTs.begin(), unmatchedLUTs.end(), [&](int a, int b) {
-        return glbInstMap[a]->getNumInpins() > glbInstMap[b]->getNumInpins();
-    });
+    std::sort(unmatchedLUTs.begin(), unmatchedLUTs.end(), [&](int a, int b)
+              { return glbInstMap[a]->getNumInpins() > glbInstMap[b]->getNumInpins(); });
 
     // 进行LUT匹配
     while (!unmatchedLUTs.empty())
@@ -353,10 +408,8 @@ void matchLUTPairs11(std::map<int, Instance *> &glbInstMap)
     }
 }
 
-
-// 修改后的匹配LUT对的多线程函数
-void matchLUTPairsThread(std::map<int, Instance *> &glbInstMap, std::vector<int> &unmatchedLUTs, 
-                         std::unordered_map<int, std::unordered_set<int>> &lutNetMap, 
+void matchLUTPairsThread(std::map<int, Instance *> &glbInstMap, std::vector<int> &unmatchedLUTs,
+                         std::unordered_map<int, std::unordered_set<int>> &lutNetMap,
                          std::unordered_map<int, std::unordered_set<int>> &netLUTMap, int start, int end)
 {
     while (start < end)
@@ -367,11 +420,11 @@ void matchLUTPairsThread(std::map<int, Instance *> &glbInstMap, std::vector<int>
         int currentLUTID = unmatchedLUTs[start];
         Instance *currentLUT = glbInstMap[currentLUTID];
 
-        // 检查当前 LUT 是否已被匹配
         {
             std::lock_guard<std::mutex> lock(lutMutex);
-            if (matchedLUTs.find(currentLUTID) != matchedLUTs.end()) {
-                ++start; // 跳过已匹配的 LUT
+            if (matchedLUTs.find(currentLUTID) != matchedLUTs.end())
+            {
+                ++start;
                 continue;
             }
         }
@@ -384,19 +437,27 @@ void matchLUTPairsThread(std::map<int, Instance *> &glbInstMap, std::vector<int>
 
             for (int otherLUTID : relatedLUTs)
             {
-                if (otherLUTID == currentLUTID) continue;
+                if (otherLUTID == currentLUTID)
+                    continue;
 
                 Instance *otherLUT = glbInstMap[otherLUTID];
 
                 {
                     std::lock_guard<std::mutex> lock(lutMutex);
-                    if (matchedLUTs.find(otherLUTID) != matchedLUTs.end()) continue;
+                    if (matchedLUTs.find(otherLUTID) != matchedLUTs.end())
+                        continue;
                 }
+
+                // 添加条件：如果两个 LUT 都是固定的，则跳过
+                if (currentLUT->isFixed() && otherLUT->isFixed())
+                    continue;
 
                 const auto &otherLUTNets = lutNetMap[otherLUTID];
                 int sharedNetCount = 0;
-                for (int net : currentLUTNets) {
-                    if (otherLUTNets.find(net) != otherLUTNets.end()) {
+                for (int net : currentLUTNets)
+                {
+                    if (otherLUTNets.find(net) != otherLUTNets.end())
+                    {
                         sharedNetCount++;
                     }
                 }
@@ -415,13 +476,17 @@ void matchLUTPairsThread(std::map<int, Instance *> &glbInstMap, std::vector<int>
         if (bestMatchedLUTID != -1)
         {
             std::lock_guard<std::mutex> lock(lutMutex);
-            if (matchedLUTs.find(currentLUTID) == matchedLUTs.end() && 
+            if (matchedLUTs.find(currentLUTID) == matchedLUTs.end() &&
                 matchedLUTs.find(bestMatchedLUTID) == matchedLUTs.end())
             {
                 matchedLUTs.insert(currentLUTID);
                 matchedLUTs.insert(bestMatchedLUTID);
+
                 currentLUT->setMatchedLUTID(bestMatchedLUTID);
                 glbInstMap[bestMatchedLUTID]->setMatchedLUTID(currentLUTID);
+
+                int newInstanceID = generateNewInstanceID();
+                lutGroups[newInstanceID] = {currentLUT, glbInstMap[bestMatchedLUTID]};
             }
         }
 
@@ -469,12 +534,11 @@ void matchLUTPairs(std::map<int, Instance *> &glbInstMap)
     }
 
     // 按引脚数量从多到少排序 unmatchedLUTs
-    std::sort(unmatchedLUTs.begin(), unmatchedLUTs.end(), [&](int a, int b) {
-        return glbInstMap[a]->getNumInpins() > glbInstMap[b]->getNumInpins();
-    });
+    std::sort(unmatchedLUTs.begin(), unmatchedLUTs.end(), [&](int a, int b)
+              { return glbInstMap[a]->getNumInpins() > glbInstMap[b]->getNumInpins(); });
 
     // 使用多线程进行匹配
-    const int numThreads = 8; // 线程数量
+    const int numThreads = 8;                          // 线程数量
     int chunkSize = unmatchedLUTs.size() / numThreads; // 每个线程处理的LUT数量
     std::vector<std::thread> threads;
 
@@ -491,4 +555,9 @@ void matchLUTPairs(std::map<int, Instance *> &glbInstMap)
     {
         t.join(); // 等待所有线程完成
     }
+    
+    size_t mapSize = lutGroups.size();
+    std::cout << "Matched Map size: " << mapSize << std::endl;
+    populateLUTGroups(glbInstMap);
+    refreshLUTGroups(lutGroups);
 }
