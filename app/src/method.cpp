@@ -140,10 +140,10 @@ void FM()
 
 
 // 统计每种类型的数量
-void generateOutputFile(const std::string &filename) {
+void generateOutputFile(bool isBaseline, const std::string &filename) {
     std::ofstream outFile(filename);
     if (!outFile) {
-        std::cerr << "无法打开文件: " << filename << std::endl;
+        std::cerr << "fail to open file " << filename << std::endl;
         return;
     }
 
@@ -176,7 +176,9 @@ void generateOutputFile(const std::string &filename) {
         int instID = instPair.first;
 
         // 获取实例的基础位置 (x, y, z)
-        auto loc = inst->getBaseLocation();
+        std::tuple<int,int,int> loc;
+        if(isBaseline) loc = inst->getBaseLocation();
+        else loc = inst->getLocation();
         int x = std::get<0>(loc);
         int y = std::get<1>(loc);
         int z = std::get<2>(loc);
@@ -196,5 +198,23 @@ void generateOutputFile(const std::string &filename) {
     }
 
     outFile.close();
-    std::cout << "文件生成成功: " << filename << std::endl;
+    std::cout << "Result file generate in " << filename << std::endl;
+}
+
+std::string getValue(const std::string& jsonContent, const std::string& key) {
+    // 构造查找键的格式，例如："libFile":
+    std::string searchKey = "\"" + key + "\":";
+
+    // 找到键的位置
+    size_t startPos = jsonContent.find(searchKey);
+    if (startPos == std::string::npos) {
+        return "";
+    }
+
+    // 跳过键和引号，定位到值的起始位置
+    startPos = jsonContent.find("\"", startPos + searchKey.length()) + 1;
+    size_t endPos = jsonContent.find("\"", startPos);
+
+    // 返回提取到的值
+    return jsonContent.substr(startPos, endPos - startPos);
 }

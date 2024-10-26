@@ -1,0 +1,5 @@
+{
+    "libFile": "WorkSpace/public/Arch/fpga.lib",
+    "sclFile": "WorkSpace/public/Arch/fpga.scl",
+    "clkFile": "WorkSpace/public/Arch/fpga.clk"
+}

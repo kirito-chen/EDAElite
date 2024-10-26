@@ -6,11 +6,11 @@ set(CMAKE_CXX_STANDARD 11)
 
 add_subdirectory(app)
 
-add_executable(checker main.cpp) 
+add_executable(eda240819 main.cpp) 
 
-target_include_directories(checker PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/app/include) 
+target_include_directories(eda240819 PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/app/include) 
 
-target_link_libraries(checker PUBLIC engine) 
+target_link_libraries(eda240819 PUBLIC engine) 
 
 
 

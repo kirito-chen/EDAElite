@@ -125,30 +125,27 @@ int selectNetId(std::vector<std::pair<int,float>>& fitnessVec){ //返回具有�
 }
 
 Instance* selectInst(Net *net){ //返回在net中随机选取的instance指针
-    std::list<Pin*> outputPin = net->getOutputPins();
-    int n = outputPin.size() + 1; // outputpin的数量加一个inputpin
+    std::list<Pin*> pinList = net->getOutputPins();
+    pinList.emplace_back(net->getInpin());
+    int n = pinList.size(); // 
     Instance* inst = nullptr;
     std::vector<int> numbers(n); // 0到n-1的数字
     std::iota(numbers.begin(), numbers.end(), 0); // 填充从0到n的数字
     while (!numbers.empty()) {
         int randomIndex = generate_random_int(0, numbers.size() - 1);
         int index = numbers[randomIndex];
-
-        if(index < outputPin.size()){
-            // 创建一个迭代器指向 list 的开始
-            std::list<Pin*>::iterator it = outputPin.begin();
-            // 使用 std::advance 移动迭代器到指定下标
-            std::advance(it, index);
-            inst = (*it)->getInstanceOwner();
-        }
-        else{ //n-1
-            inst = net->getInpin()->getInstanceOwner();
-        }
+        
+        // 创建一个迭代器指向 list 的开始
+        std::list<Pin*>::iterator it = pinList.begin();
+        // 使用 std::advance 移动迭代器到指定下标
+        std::advance(it, index);
+        inst = (*it)->getInstanceOwner();
         
         // 检查是否符合规则
         if (inst->isFixed()) {
             // 移除不符合规则的数字
             numbers.erase(numbers.begin() + randomIndex);
+            inst = nullptr;
         } else {
             break;
         }
@@ -245,7 +242,7 @@ bool isValid(bool isBaseline, int x, int y, int& z, Instance* inst){ //判断这
             // DRAM at slot1 blocks lut slot 4~7
             hasDRAM[idx] = 1;
         }
-        if(hasDRAM[0] & hasDRAM[1]){
+        if(hasDRAM[0] && hasDRAM[1]){
             //两个都是DRAM，不可放置
             return false;
         }
@@ -264,7 +261,7 @@ bool isValid(bool isBaseline, int x, int y, int& z, Instance* inst){ //判断这
             lutBegin = 0;
             lutEnd = 8;
         }
-        std::vector<int> record(8,0);
+        std::vector<std::pair<int, int> > record;  //记录每个引脚小于6的 lut  [idx, pinNum]
         for (int idx = lutBegin; idx < lutEnd; idx++) {
             Slot* slot = lutSlotArr[idx];
             if (slot == nullptr) {
@@ -276,11 +273,8 @@ bool isValid(bool isBaseline, int x, int y, int& z, Instance* inst){ //判断这
             } else {
                 instances = slot->getOptimizedInstances();
             }
-            if(instances.size() > 1){
+            if(instances.size() <= 1){
                 //大于1个lut，不可放入了
-                continue;
-            }
-            else{
                 instances.push_back(instId); //添加当前instId
                 std::set<int> totalInputs;
                 for (auto instID : instances) {
@@ -288,27 +282,22 @@ bool isValid(bool isBaseline, int x, int y, int& z, Instance* inst){ //判断这
                     std::vector<Pin*> inpins = instPtr->getInpins();
                     for (auto pin : inpins) {
                         if (pin->getNetID() != -1) {
-                        totalInputs.insert(pin->getNetID());
+                            totalInputs.insert(pin->getNetID());
                         }
                     }
                 }
                 if (totalInputs.size() <= 6) {
                     //符合条件 记录
-                    record[idx] = totalInputs.size();
+                    record.emplace_back(std::make_pair(idx, totalInputs.size()));
                 }
             }
         }
-        int maxRecord = -1;
-        int maxIdx = -1;
-        // 找到小于等于6个引脚的最大引脚位置
-        for (int idx = lutBegin; idx < lutEnd; idx++) {
-            if(record[idx] <= 6 && record[idx] > maxRecord){
-                maxRecord = record[idx];
-                maxIdx = idx;
-            }
-        }
-        if(maxIdx != -1){
-            z = maxIdx;
+        if(record.size() != 0){
+            // 按第二个元素降序排序
+            std::sort(record.begin(), record.end(), [](const std::pair<int, int>& a, const std::pair<int, int>& b) {
+                return a.second > b.second;  // 使用 > 实现降序
+            });
+            z = record[0].first;
             return true;
         }
     }
@@ -363,7 +352,7 @@ bool isValid(bool isBaseline, int x, int y, int& z, Instance* inst){ //判断这
             }
             else{
                 // SEQ只要返回一个空位子即可
-                slotArr seqSlotArr = *(tile->getInstanceByType("SEQ"));
+                // slotArr seqSlotArr = *(tile->getInstanceByType("SEQ"));
                 for(int i = start; i < end; i++){
                     Slot *slot = seqSlotArr[i];
                     std::list<int> listTmp;
@@ -434,6 +423,7 @@ std::tuple<int,int,int> findSuitableLoc(bool isBaseline, int x, int y, int range
     return {xx, yy, zz};
 }
 
+//
 int changeTile(bool isBaseline, std::tuple<int, int, int> originLoc, std::tuple<int, int, int> loc, Instance* inst){
     int xCur, yCur, zCur, xGoal, yGoal, zGoal;
     std::tie(xCur, yCur, zCur) = originLoc;
@@ -444,28 +434,27 @@ int changeTile(bool isBaseline, std::tuple<int, int, int> originLoc, std::tuple<
     //删除旧的tile插槽中的inst
     slotArr *slotArrCur = tileCur->getInstanceByType(inst->getModelName().substr(0,3)); //LUT or SEQ
     Slot* slot = slotArrCur->at(zCur);
-    std::list<int> instances;
     if (isBaseline) {
-        instances = slot->getBaselineInstances();
+        std::list<int>& instances = slot->getBaselineInstances();
+        for(int instIdTmp : instances){
+            if(instId == instIdTmp){
+                instances.remove(instIdTmp);
+                break;
+            }
+        }
     } else {
-        instances = slot->getOptimizedInstances();
-    }
-    for(int instIdTmp : instances){
-        if(instId == instIdTmp){
-            instances.remove(instIdTmp);
-            break;
+        std::list<int>& instances = slot->getOptimizedInstancesRef();
+        for(int instIdTmp : instances){
+            if(instId == instIdTmp){
+                instances.remove(instIdTmp);
+                break;
+            }
         }
     }
+    
 
     //在新的插槽中插入
-    slotArr slotArrGoal = *(tileGoal->getInstanceByType(inst->getModelName().substr(0,3)));
-    Slot* slotGoal = slotArrGoal[zGoal];
-    if (isBaseline) {
-        instances = slotGoal->getBaselineInstances();
-    } else {
-        instances = slotGoal->getOptimizedInstances();
-    }
-    instances.emplace_back(instId);
+    tileGoal->addInstance(instId, zGoal, inst->getModelName(), isBaseline);
 
     return 0;
 }
@@ -491,8 +480,11 @@ int arbsa(bool isBaseline){
     sortedFitness(fitnessVec);
 
     // 初始化迭代次数Iter、初始化温度T
-    int Iter = 0, InnerIter = int( pow(glbInstMap.size(),4/3) ); 
-    float T = 1, threashhold = 1e-5, alpha = 0.8; //0.8-0.99
+    int Iter = 0;
+    // int InnerIter = int( pow(glbInstMap.size(),4/3) ); 
+    int InnerIter = int( glbInstMap.size()*0.2 ); 
+    // int InnerIter = 100;
+    float T = 100, threashhold = 1e-3, alpha = 0.8; //0.8-0.99
     // 计算初始cost
     int cost = 0, costNew = 0;
     cost = getWirelength(isBaseline);
@@ -546,13 +538,13 @@ int arbsa(bool isBaseline){
 
     //计算标准差
     double standardDeviation = calculateStandardDeviation(sigmaVecInit);
+    std::cout<<"------------------------------------------------\n";
     std::cout << "[INFO] Standard Deviation: " << standardDeviation << std::endl;
     T = 0.5 * standardDeviation;
-    
-    std::cout<<"------------------------------------------------\n";
     std::cout<<"[INFO] The simulated annealing algorithm starts "<< std::endl;
     std::cout<<"[INFO] initial temperature T= "<< T <<", threshhold= "<<threashhold<<", alpha= "<<alpha<< ", InnerIter= "<<InnerIter<<", seed="<<seed<<std::endl;
 
+    bool timeup = false;
     // 外层循环 温度大于阈值， 更新一次fitness优先级列表
     while(T > threashhold){
         //记录接受的new_cost
@@ -615,7 +607,6 @@ int arbsa(bool isBaseline){
             }
             else{
                 // else 取(0,1)随机数，判断随机数是否小于 e^(-deta/T) 是则同样更新操作，更新fitness列表
-
                 // 生成一个 0 到 1 之间的随机浮点数
                 double randomValue = generate_random_double(0.0, 1.0);
                 double eDetaT = exp(-deta/T);
@@ -643,9 +634,16 @@ int arbsa(bool isBaseline){
             if(counterNet == counterNetLimit){
                 rangeDesiredMap = rangeActualMap;
                 counterNet = 0;
+                auto tmp = std::chrono::high_resolution_clock::now();
+                // 计算运行时间
+                std::chrono::duration<double> durationtmp = tmp - start;
+                if(durationtmp.count() >= 1180){
+                    timeup = true;
+                    break;
+                }
             }
-            
         }
+        if(timeup) break; //时间快到了，结束
         
         double acceptRate = sigmaVec.size() / InnerIter;
         if(0.96 <= acceptRate){
