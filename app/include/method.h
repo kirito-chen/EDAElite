@@ -4,6 +4,8 @@
 #include <map>
 #include "object.h"
 #include "arch.h"
+#include "global.h"
+
 
 #include <unordered_map>
 #include <unordered_set>
@@ -18,3 +20,5 @@ void matchLUTGroupsToPLB(std::map<int, std::set<Instance*>> &lutGroups, std::map
 // void assignLUTSiteInPLB(std::map<int, std::set<Instance*>> &plbGroups);
 
 void updatePLBLocations(std::map<int, std::set<std::set<Instance*>>> &plbGroups);
+// void buildGlobalPLBPlacement(const std::map<int, std::set<std::set<Instance *>>> &plbGroups);
+void initializePLBPlacementMap(const std::map<int, std::set<std::set<Instance*>>> &plbGroups);

@@ -293,6 +293,14 @@ int main(int argc, char *argv[])
         }
     }
 
+    for(auto &plbgroupP : plbPlacementMap)
+    {
+        if(plbgroupP.first == 10000 || (plbgroupP.second.getConnectedNets().size()>20 && plbgroupP.second.getFixed()))
+        {
+            std::cout << lineBreaker << std::endl;
+        }
+    }
+
     //-------------------测试---------------
     // testHPWL();
     // reportWirelength();

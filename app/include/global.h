@@ -15,6 +15,7 @@
 #include <mutex>
 #include <thread>
 
+
 // global variables
 extern std::map<std::string, Lib*> glbLibMap;
 extern std::map<int, Instance*> glbInstMap;
@@ -26,3 +27,5 @@ extern std::string lineBreaker;
 // 全局变量：用于存储LUT组合
 extern std::map<int, std::set<Instance*>> lutGroups; // 新的组合实例映射
 extern std::map<int, std::set<std::set<Instance*>>> plbGroups;
+// 全局 PLBPlacement 映射
+extern std::unordered_map<int, PLBPlacement> plbPlacementMap;

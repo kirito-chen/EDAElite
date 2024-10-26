@@ -1,6 +1,5 @@
 #include <iomanip>
 // #include "legal.h"
-#include "global.h"
 #include "object.h"
 #include "method.h"
 #include <algorithm>
@@ -24,20 +23,24 @@ int generateNewInstanceID()
 std::mutex lutMutex;
 std::unordered_set<int> matchedLUTs; // 存储已匹配的 LUT IDs
 
-void populateLUTGroups(std::map<int, Instance *> &glbInstMap) {
-    for (const auto &instPair : glbInstMap) {
+void populateLUTGroups(std::map<int, Instance *> &glbInstMap)
+{
+    for (const auto &instPair : glbInstMap)
+    {
         int instID = instPair.first;
         Instance *inst = instPair.second;
 
         // 跳过非LUT的实例
-        if (!isLUTType(inst->getModelName())) {
+        if (!isLUTType(inst->getModelName()))
+        {
             continue;
         }
 
         // 检查实例的 matchedLUTID
         int matchedID = inst->getMatchedLUTID();
-        
-        if (matchedID == -1) {
+
+        if (matchedID == -1)
+        {
             // 实例未匹配，作为单个 LUT 插入 lutGroups
             int newInstanceID = generateNewInstanceID();
             lutGroups[newInstanceID] = {inst};
@@ -46,30 +49,36 @@ void populateLUTGroups(std::map<int, Instance *> &glbInstMap) {
 }
 
 // 如果组内有一个固定的LUT且另一个是非固定的LUT，则更新非固定LUT的位置
-void refreshLUTGroups(std::map<int, std::set<Instance*>> &lutGroups) {
-    for (auto &groupPair : lutGroups) {
+void refreshLUTGroups(std::map<int, std::set<Instance *>> &lutGroups)
+{
+    for (auto &groupPair : lutGroups)
+    {
         auto &lutGroup = groupPair.second;
-        
+
         // 检查组内是否有固定的LUT
         Instance *fixedLUT = nullptr;
         Instance *movableLUT = nullptr;
 
-        for (Instance *lut : lutGroup) {
-            if (lut->isFixed()) {
+        for (Instance *lut : lutGroup)
+        {
+            if (lut->isFixed())
+            {
                 fixedLUT = lut;
-            } else {
+            }
+            else
+            {
                 movableLUT = lut;
             }
         }
 
         // 如果组内有一个固定的LUT且另一个是非固定的LUT，则更新非固定LUT的位置并固定LUT
-        if (fixedLUT && movableLUT) {
+        if (fixedLUT && movableLUT)
+        {
             movableLUT->setLocation(fixedLUT->getLocation());
             movableLUT->modifyFixed(true);
         }
     }
 }
-
 
 // 检查实例是否为 LUT 类型
 bool isLUTType(const std::string &modelName)
@@ -555,23 +564,26 @@ void matchLUTPairs(std::map<int, Instance *> &glbInstMap)
     {
         t.join(); // 等待所有线程完成
     }
-    
+
     size_t mapSize = lutGroups.size();
     std::cout << "Matched Map size: " << mapSize << std::endl;
     populateLUTGroups(glbInstMap);
     refreshLUTGroups(lutGroups);
     matchLUTGroupsToPLB(lutGroups, plbGroups);
     updatePLBLocations(plbGroups);
+    initializePLBPlacementMap(plbGroups);
 }
 
 // PLB打包
-void matchLUTGroupsToPLB(std::map<int, std::set<Instance*>> &lutGroups, std::map<int, std::set<std::set<Instance*>>> &plbGroups) {
+void matchLUTGroupsToPLB(std::map<int, std::set<Instance *>> &lutGroups, std::map<int, std::set<std::set<Instance *>>> &plbGroups)
+{
     std::unordered_map<int, std::unordered_set<int>> lutGroupNetMap; // LUT组 ID -> 所有连接的net ID（并集）
     std::unordered_map<int, std::unordered_set<int>> netLUTGroupMap; // Net ID -> 所有连接该net的LUT组 ID
-    std::set<int> unmatchedLUTGroups;                               // 未匹配的LUT组集合
+    std::set<int> unmatchedLUTGroups;                                // 未匹配的LUT组集合
 
     // 构建 LUT组 和 Net 的映射
-    for (const auto &groupPair : lutGroups) {
+    for (const auto &groupPair : lutGroups)
+    {
         int groupID = groupPair.first;
         const auto &lutGroup = groupPair.second;
 
@@ -580,26 +592,31 @@ void matchLUTGroupsToPLB(std::map<int, std::set<Instance*>> &lutGroups, std::map
 
         // 遍历每个 LUT 组内的所有实例的 net 集合，取并集
         std::unordered_set<int> groupNets;
-        for (Instance *lut : lutGroup) {
-            for (int i = 0; i < lut->getNumInpins(); ++i) {
+        for (Instance *lut : lutGroup)
+        {
+            for (int i = 0; i < lut->getNumInpins(); ++i)
+            {
                 Pin *pin = lut->getInpin(i);
                 int netID = pin->getNetID();
 
                 // 跳过未连接的引脚或属性为 CLOCK 的 net
-                if (netID == -1 || pin->getProp() == PIN_PROP_CLOCK) {
+                if (netID == -1 || pin->getProp() == PIN_PROP_CLOCK)
+                {
                     continue;
                 }
 
                 groupNets.insert(netID); // 添加到LUT组的net并集中
                 netLUTGroupMap[netID].insert(groupID);
             }
-            
-            for (int i = 0; i < lut->getNumOutpins(); ++i) {
+
+            for (int i = 0; i < lut->getNumOutpins(); ++i)
+            {
                 Pin *pin = lut->getOutpin(i);
                 int netID = pin->getNetID();
 
                 // 跳过未连接的引脚或属性为 CLOCK 的 net
-                if (netID == -1 || pin->getProp() == PIN_PROP_CLOCK) {
+                if (netID == -1 || pin->getProp() == PIN_PROP_CLOCK)
+                {
                     continue;
                 }
 
@@ -611,10 +628,11 @@ void matchLUTGroupsToPLB(std::map<int, std::set<Instance*>> &lutGroups, std::map
     }
 
     // 开始匹配 LUT 组
-    while (!unmatchedLUTGroups.empty()) {
-        int currentPLBID = plbGroups.size();             // 新的PLB ID
-        std::set<std::set<Instance*>> currentPLB;        // 当前PLB内的LUT组集合
-        int maxGroupCount = 8;                           // 一个PLB最多容纳8个LUT组
+    while (!unmatchedLUTGroups.empty())
+    {
+        int currentPLBID = plbGroups.size();                       // 新的PLB ID
+        std::set<std::set<Instance *>> currentPLB;                 // 当前PLB内的LUT组集合
+        int maxGroupCount = 8;                                     // 一个PLB最多容纳8个LUT组
         std::tuple<int, int, int> plbFixedLocation = {-1, -1, -1}; // 初始化固定位置为无效值
 
         // 从未匹配的LUT组中选择一个作为初始组
@@ -623,15 +641,18 @@ void matchLUTGroupsToPLB(std::map<int, std::set<Instance*>> &lutGroups, std::map
         currentPLB.insert(lutGroups[currentGroupID]); // 将当前组添加到PLB
 
         // 检查当前LUT组是否有固定位置
-        for (Instance *lut : lutGroups[currentGroupID]) {
-            if (lut->isFixed()) {
+        for (Instance *lut : lutGroups[currentGroupID])
+        {
+            if (lut->isFixed())
+            {
                 plbFixedLocation = lut->getLocation(); // 设置PLB的固定位置
                 break;
             }
         }
 
         // 继续添加其他LUT组到当前PLB，直到达到限制或没有匹配项
-        while (currentPLB.size() < maxGroupCount) {
+        while (currentPLB.size() < maxGroupCount)
+        {
             int bestMatchedGroupID = -1;
             int maxSharedNets = -1;
 
@@ -639,11 +660,14 @@ void matchLUTGroupsToPLB(std::map<int, std::set<Instance*>> &lutGroups, std::map
             const auto &currentGroupNets = lutGroupNetMap[currentGroupID];
 
             // 遍历当前组的net，找到与该net共享的所有LUT组
-            for (int netID : currentGroupNets) {
+            for (int netID : currentGroupNets)
+            {
                 const auto &relatedLUTGroups = netLUTGroupMap[netID];
 
-                for (int otherGroupID : relatedLUTGroups) {
-                    if (unmatchedLUTGroups.find(otherGroupID) == unmatchedLUTGroups.end()) {
+                for (int otherGroupID : relatedLUTGroups)
+                {
+                    if (unmatchedLUTGroups.find(otherGroupID) == unmatchedLUTGroups.end())
+                    {
                         continue; // 跳过已匹配的LUT组
                     }
 
@@ -651,31 +675,40 @@ void matchLUTGroupsToPLB(std::map<int, std::set<Instance*>> &lutGroups, std::map
 
                     // 检查另一个LUT组是否有固定位置
                     bool locationConflict = false;
-                    for (Instance *otherLUT : lutGroups[otherGroupID]) {
-                        if (otherLUT->isFixed()) {
-                            if (plbFixedLocation == std::make_tuple(-1, -1, -1)) {
+                    for (Instance *otherLUT : lutGroups[otherGroupID])
+                    {
+                        if (otherLUT->isFixed())
+                        {
+                            if (plbFixedLocation == std::make_tuple(-1, -1, -1))
+                            {
                                 plbFixedLocation = otherLUT->getLocation(); // 更新PLB固定位置
-                            } else if (plbFixedLocation != otherLUT->getLocation()) {
+                            }
+                            else if (plbFixedLocation != otherLUT->getLocation())
+                            {
                                 locationConflict = true; // 固定位置冲突
                                 break;
                             }
                         }
                     }
-                    if (locationConflict) {
+                    if (locationConflict)
+                    {
                         continue; // 跳过固定位置冲突的LUT组
                     }
 
                     // 计算共享网络数量
                     int sharedNetCount = 0;
-                    for (int net : currentGroupNets) {
-                        if (otherGroupNets.find(net) != otherGroupNets.end()) {
+                    for (int net : currentGroupNets)
+                    {
+                        if (otherGroupNets.find(net) != otherGroupNets.end())
+                        {
                             sharedNetCount++;
                         }
                     }
 
                     // 使用 unionSets 计算合并后的引脚数量
                     // std::unordered_set<int> unionPins = unionSets(currentGroupNets, otherGroupNets);
-                    if (sharedNetCount > maxSharedNets) {
+                    if (sharedNetCount > maxSharedNets)
+                    {
                         maxSharedNets = sharedNetCount;
                         bestMatchedGroupID = otherGroupID;
                     }
@@ -683,10 +716,13 @@ void matchLUTGroupsToPLB(std::map<int, std::set<Instance*>> &lutGroups, std::map
             }
 
             // 如果找到最佳匹配，将其添加到PLB中
-            if (bestMatchedGroupID != -1) {
+            if (bestMatchedGroupID != -1)
+            {
                 currentPLB.insert(lutGroups[bestMatchedGroupID]);
                 unmatchedLUTGroups.erase(bestMatchedGroupID); // 从未匹配列表中移除
-            } else {
+            }
+            else
+            {
                 break; // 没有更多可添加的LUT组
             }
         }
@@ -696,43 +732,98 @@ void matchLUTGroupsToPLB(std::map<int, std::set<Instance*>> &lutGroups, std::map
     }
 }
 
-void updatePLBLocations(std::map<int, std::set<std::set<Instance*>>> &plbGroups) {
-    for (auto &plbGroup : plbGroups) {
+void updatePLBLocations(std::map<int, std::set<std::set<Instance *>>> &plbGroups)
+{
+    for (auto &plbGroup : plbGroups)
+    {
         // 获取PLB组的ID和包含的LUT组集合
         int plbID = plbGroup.first;
         auto &lutGroupSet = plbGroup.second;
+
+        std::set<int> availableSites = {0, 1, 2, 3, 4, 5, 6, 7}; // 可用的 LUT 站点索引
 
         // 检查是否有固定的LUT组
         std::tuple<int, int, int> fixedLocation(-1, -1, -1);
         bool hasFixedLUT = false;
 
-        for (auto &lutGroup : lutGroupSet) {
-            for (Instance *lut : lutGroup) {
-                if (lut->isFixed()) {
+        for (auto &lutGroup : lutGroupSet)
+        {
+            for (Instance *lut : lutGroup)
+            {
+                if (lut->isFixed())
+                {
                     fixedLocation = lut->getLocation();
                     hasFixedLUT = true;
+                    int fixedZ = std::get<2>(fixedLocation);
+                    // 将固定站点的 `z` 索引标记为已使用
+                    availableSites.erase(fixedZ);
                     break;
                 }
             }
-            if (hasFixedLUT) {
+            if (hasFixedLUT)
+            {
                 break;
             }
         }
 
         // 如果有固定的LUT组，则更新同PLB内所有LUT组的位置
-        if (hasFixedLUT) {
-            int siteIndex = 0;
-            for (auto &lutGroup : lutGroupSet) {
-                for (Instance *lut : lutGroup) {
-                    auto newLocation = std::make_tuple(
-                        std::get<0>(fixedLocation), 
-                        std::get<1>(fixedLocation), 
-                        siteIndex++
-                    );
-                    lut->setLocation(newLocation);
+        if (hasFixedLUT)
+        {
+            for (auto &lutGroup : lutGroupSet)
+            {
+                int siteIndex = *availableSites.begin();
+                for (Instance *lut : lutGroup)
+                {
+                    if (!lut->isFixed())
+                    {
+                        auto newLocation = std::make_tuple(
+                            std::get<0>(fixedLocation),
+                            std::get<1>(fixedLocation),
+                            siteIndex);
+
+                        lut->setLocation(newLocation);
+                        lut->setFixed(true);
+                    }
                 }
+                availableSites.erase(siteIndex); // 标记该站点为已使用
             }
         }
     }
 }
 
+// 初始化 plbPlacementMap 的函数
+void initializePLBPlacementMap(const std::map<int, std::set<std::set<Instance *>>> &plbGroups)
+{
+    for (const auto &plbGroup : plbGroups)
+    {
+        // 创建带有唯一 ID 的 PLBPlacement 实例
+        int plbID = plbGroup.first;
+        PLBPlacement plbPlacement(plbID);
+
+        // 检查第一个 LUT 是否固定
+        const auto &firstLUTGroup = *plbGroup.second.begin();
+        bool isGroupFixed = !firstLUTGroup.empty() && (*firstLUTGroup.begin())->isFixed();
+
+        // 存储每个 PLB 的内部 LUT 组信息
+        for (const auto &lutGroup : plbGroup.second)
+        {
+            plbPlacement.addLUTGroup(lutGroup);
+
+            // 获取并合并每个 LUT 的连接 nets
+            for (const Instance *lut : lutGroup)
+            {
+                std::set<Net *> relatedNets = lut->getRelatedNets();
+                for (const auto &net : relatedNets)
+                {
+                    plbPlacement.addConnectedNet(net->getId());
+                }
+            }
+        }
+
+        // 根据第一个 LUT 的固定状态设置 isFixed
+        plbPlacement.setFixed(isGroupFixed);
+
+        // 将 PLBPlacement 插入到全局 plbPlacementMap 中
+        plbPlacementMap[plbID] = plbPlacement;
+    }
+}
