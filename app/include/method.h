@@ -22,3 +22,7 @@ void matchLUTGroupsToPLB(std::map<int, std::set<Instance*>> &lutGroups, std::map
 void updatePLBLocations(std::map<int, std::set<std::set<Instance*>>> &plbGroups);
 // void buildGlobalPLBPlacement(const std::map<int, std::set<std::set<Instance *>>> &plbGroups);
 void initializePLBPlacementMap(const std::map<int, std::set<std::set<Instance*>>> &plbGroups);
+void initializeSEQPlacementMap(const std::map<int, Instance*>& glbInstMap);
+
+
+

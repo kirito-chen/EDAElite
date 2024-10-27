@@ -11,3 +11,6 @@ std::string lineBreaker = "------------------------------------------";
 std::map<int, std::set<Instance*>> lutGroups; // 新的组合实例映射
 std::map<int, std::set<std::set<Instance*>>> plbGroups;
 std::unordered_map<int, PLBPlacement> plbPlacementMap;
+std::map<int, SEQBankPlacement> seqPlacementMap;
+
+

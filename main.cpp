@@ -280,24 +280,26 @@ int main(int argc, char *argv[])
         std::cout << std::endl;
     }
 
-    matchLUTPairs(glbInstMap);
+    matchLUTPairs(glbInstMap);  
     size_t mapSize = lutGroups.size();
     std::cout << "Map size: " << mapSize << std::endl;
+    std::cout << "plbPlacementMap size: " << plbPlacementMap.size() << std::endl;
+    std::cout << "seqPlacementMap size: " << seqPlacementMap.size() << std::endl;
 
     // 检测数据
-    for (auto &inst : glbInstMap)
-    {
-        if (inst.first == 43907)
-        {
-            std::cout << lineBreaker << std::endl;
-        }
-    }
+    // for (auto &inst : glbInstMap)
+    // {
+    //     if (inst.first == 43907)
+    //     {
+    //         std::cout << lineBreaker << std::endl;
+    //     }
+    // }
 
     for(auto &plbgroupP : plbPlacementMap)
     {
         if(plbgroupP.first == 10000 || (plbgroupP.second.getConnectedNets().size()>20 && plbgroupP.second.getFixed()))
         {
-            std::cout << lineBreaker << std::endl;
+            std::cout << "-";
         }
     }
 

@@ -22,6 +22,7 @@ int generateNewInstanceID()
 // 共享数据结构的锁
 std::mutex lutMutex;
 std::unordered_set<int> matchedLUTs; // 存储已匹配的 LUT IDs
+std::mutex seqPlacementMutex; // 互斥锁保护对 seqPlacementMap 的访问
 
 void populateLUTGroups(std::map<int, Instance *> &glbInstMap)
 {
@@ -572,6 +573,8 @@ void matchLUTPairs(std::map<int, Instance *> &glbInstMap)
     matchLUTGroupsToPLB(lutGroups, plbGroups);
     updatePLBLocations(plbGroups);
     initializePLBPlacementMap(plbGroups);
+    initializeSEQPlacementMap(glbInstMap);
+
 }
 
 // PLB打包
@@ -802,6 +805,7 @@ void initializePLBPlacementMap(const std::map<int, std::set<std::set<Instance *>
 
         // 检查第一个 LUT 是否固定
         const auto &firstLUTGroup = *plbGroup.second.begin();
+
         bool isGroupFixed = !firstLUTGroup.empty() && (*firstLUTGroup.begin())->isFixed();
 
         // 存储每个 PLB 的内部 LUT 组信息
@@ -822,8 +826,126 @@ void initializePLBPlacementMap(const std::map<int, std::set<std::set<Instance *>
 
         // 根据第一个 LUT 的固定状态设置 isFixed
         plbPlacement.setFixed(isGroupFixed);
+        if (isGroupFixed)
+        {
+            // 获取 firstLUTGroup 的第一个 LUT
+            const Instance *firstLUT = *firstLUTGroup.begin();
+
+            // 提取 location 并将 x 和 y 存储在变量中
+            int temp_x = std::get<0>(firstLUT->getLocation());
+            int temp_y = std::get<1>(firstLUT->getLocation());
+            plbPlacement.setPLBLocation(temp_x, temp_y);
+        }
 
         // 将 PLBPlacement 插入到全局 plbPlacementMap 中
         plbPlacementMap[plbID] = plbPlacement;
+    }
+}
+
+// 初始化seqPlacementMap的函数
+void initializeSEQPlacementMap_non(const std::map<int, Instance*>& glbInstMap) {
+    int bankID = 0;
+
+    for (const auto& instPair : glbInstMap) {
+        Instance* inst = instPair.second;
+
+        // 检查是否为 SEQ 类型，如果不是则跳过
+        if (inst->getModelName().substr(0, 3) != "SEQ") {
+            continue;
+        }
+
+        bool placed = false;
+
+        // 尝试将当前 SEQ 实例放入现有的 bank
+        for (auto& [_, bank] : seqPlacementMap) {
+            // 判断是否符合 bank 的约束：检查连接情况并确保数量限制在 8 个以内
+            if (bank.getSEQCount() < 8 && bank.addInstance(inst)) { 
+                placed = true;
+                break;
+            }
+        }
+
+        // 如果没有找到合适的 Bank，新建一个 Bank 并添加
+        if (!placed) {
+            SEQBankPlacement newBank(bankID++);
+
+            // 如果该 SEQ 是固定的，设置 bank 的固定信息和位置
+            if (inst->isFixed()) {
+                newBank.setFixed(true);
+                auto [x, y, _] = inst->getLocation();  // 假设 Location 中包含 (x, y, z)
+                newBank.setLocation(x, y);
+            }
+
+            newBank.addInstance(inst);
+            seqPlacementMap[newBank.getBankID()] = newBank;
+        }
+    }
+}
+
+
+void processSEQInstances(const std::map<int, Instance*>& glbInstMapPart, int& bankID) {
+    for (const auto& instPair : glbInstMapPart) {
+        Instance* inst = instPair.second;
+
+        // 检查是否为 SEQ 类型，如果不是则跳过
+        if (inst->getModelName().substr(0, 3) != "SEQ") {
+            continue;
+        }
+
+        bool placed = false;
+
+        {
+            // 尝试将当前 SEQ 实例放入现有的 bank，使用锁保护共享访问
+            std::lock_guard<std::mutex> lock(seqPlacementMutex);
+            for (auto& [_, bank] : seqPlacementMap) {
+                // 判断是否符合 bank 的约束：检查连接情况并确保数量限制在 8 个以内
+                if (bank.getSEQCount() < 8 && bank.addInstance(inst)) { 
+                    placed = true;
+                    break;
+                }
+            }
+        }
+
+        // 如果没有找到合适的 Bank，新建一个 Bank 并添加
+        if (!placed) {
+            SEQBankPlacement newBank(bankID++);
+
+            // 如果该 SEQ 是固定的，设置 bank 的固定信息和位置
+            if (inst->isFixed()) {
+                newBank.setFixed(true);
+                auto [x, y, _] = inst->getLocation(); // 假设 Location 中包含 (x, y, z)
+                newBank.setLocation(x, y);
+            }
+
+            // 添加新 Bank
+            {
+                std::lock_guard<std::mutex> lock(seqPlacementMutex);
+                newBank.addInstance(inst);
+                seqPlacementMap[newBank.getBankID()] = newBank;
+            }
+        }
+    }
+}
+
+void initializeSEQPlacementMap(const std::map<int, Instance*>& glbInstMap) {
+    int bankID = 0;
+    int numThreads = 8;
+    std::vector<std::thread> threads;
+    int partSize = glbInstMap.size() / numThreads;
+    
+    auto it = glbInstMap.begin();
+    for (int i = 0; i < numThreads; ++i) {
+        // 每个线程处理 glbInstMap 的一部分
+        std::map<int, Instance*> glbInstMapPart;
+        for (int j = 0; j < partSize && it != glbInstMap.end(); ++j, ++it) {
+            glbInstMapPart[it->first] = it->second;
+        }
+        // 启动线程
+        threads.emplace_back(processSEQInstances, std::cref(glbInstMapPart), std::ref(bankID));
+    }
+
+    // 等待所有线程完成
+    for (auto& thread : threads) {
+        thread.join();
     }
 }

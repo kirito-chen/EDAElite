@@ -29,3 +29,7 @@ extern std::map<int, std::set<Instance*>> lutGroups; // 新的组合实例映射
 extern std::map<int, std::set<std::set<Instance*>>> plbGroups;
 // 全局 PLBPlacement 映射
 extern std::unordered_map<int, PLBPlacement> plbPlacementMap;
+// 全局SEQ映射
+extern std::map<int, SEQBankPlacement> seqPlacementMap;
+
+

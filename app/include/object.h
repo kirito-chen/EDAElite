@@ -422,7 +422,11 @@ private:
 
 public:
     // 默认构造函数
-    PLBPlacement() : plbID(-1) { location = std::tuple<int, int>(-1, -1); isFixed = true; }
+    PLBPlacement() : plbID(-1)
+    {
+        location = std::tuple<int, int>(-1, -1);
+        isFixed = true;
+    }
 
     // 带有 ID 的构造函数
     PLBPlacement(int id) : plbID(id) {}
@@ -456,4 +460,84 @@ public:
 
     bool getFixed() { return isFixed; }
     void setFixed(bool isfix) { isFixed = isfix; }
+};
+
+class SEQBankPlacement
+{
+private:
+    int bankID;                           // Bank ID
+    std::tuple<int, int> location;        // Bank的(x, y)位置
+    std::vector<Instance *> seqInstances; // 当前Bank内的SEQ实例
+    std::set<int> clkNets;                // 时钟引脚
+    std::set<int> ceNets;                 // CE引脚
+    std::set<int> srNets;                 // RESET引脚
+    bool isFixed;                         // 当前Bank是否固定
+
+public:
+    // 默认构造函数
+    SEQBankPlacement() : bankID(-1)
+    {
+        
+    }
+
+    // 构造函数
+    SEQBankPlacement(int id) : bankID(id), isFixed(false) {}
+
+    // 设置和获取Bank的ID
+    int getBankID() const { return bankID; }
+    void setBankID(int id) { bankID = id; }
+
+    // 获取和设置位置
+    std::tuple<int, int> getLocation() const { return location; }
+    void setLocation(int x, int y) { location = std::make_tuple(x, y); }
+
+    // 添加SEQ实例到当前Bank
+    bool addInstance(Instance *inst)
+    {
+        int newClk = clkNets.size();
+        int newCE = ceNets.size();
+        int newSR = srNets.size();
+
+        for (Pin *pin : inst->getInpins())
+        {
+            int netID = pin->getNetID();
+            PinProp prop = pin->getProp();
+
+            if (prop == PIN_PROP_CLOCK && clkNets.find(netID) == clkNets.end())
+                newClk++;
+            if (prop == PIN_PROP_CE && ceNets.find(netID) == ceNets.end())
+                newCE++;
+            if (prop == PIN_PROP_RESET && srNets.find(netID) == srNets.end())
+                newSR++;
+        }
+
+        // 检查是否超过Bank约束
+        if (newClk <= MAX_TILE_CLOCK_PER_PLB_BANK && newCE <= MAX_TILE_CE_PER_PLB_BANK && newSR <= MAX_TILE_RESET_PER_PLB_BANK)
+        {
+            seqInstances.push_back(inst);
+            for (Pin *pin : inst->getInpins())
+            {
+                int netID = pin->getNetID();
+                PinProp prop = pin->getProp();
+
+                if (prop == PIN_PROP_CLOCK)
+                    clkNets.insert(netID);
+                if (prop == PIN_PROP_CE)
+                    ceNets.insert(netID);
+                if (prop == PIN_PROP_RESET)
+                    srNets.insert(netID);
+            }
+            return true;
+        }
+        return false;
+    }
+
+    int getSEQCount()
+    {
+        return seqInstances.size();
+    }
+
+    // 设置和获取是否固定
+    bool getFixed() const { return isFixed; }
+    void setFixed(bool fixed) { isFixed = fixed; }
 };
