@@ -14,3 +14,4 @@ extern std::map<int, Net*> glbNetMap;
 extern Arch chip;
 extern RecSteinerMinTree rsmt;
 extern std::string lineBreaker;
+extern int** isPLB;

@@ -24,5 +24,6 @@ else
         
         # 执行命令
         $program "$input_nodes" "$input_nets" "$input_timing" "$output_nodes"
+        ./checker/checker checker/case${i}.run
     done
 fi

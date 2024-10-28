@@ -201,6 +201,7 @@ void generateOutputFile(bool isBaseline, const std::string &filename) {
     std::cout << "Result file generate in " << filename << std::endl;
 }
 
+//获取json文件信息
 std::string getValue(const std::string& jsonContent, const std::string& key) {
     // 构造查找键的格式，例如："libFile":
     std::string searchKey = "\"" + key + "\":";
@@ -217,4 +218,35 @@ std::string getValue(const std::string& jsonContent, const std::string& key) {
 
     // 返回提取到的值
     return jsonContent.substr(startPos, endPos - startPos);
+}
+
+//赋值isPLB数组
+int setIsPLB(){
+    int numCol = chip.getNumCol(); //150
+    int numRow = chip.getNumRow(); //300
+    isPLB = new int*[numCol];
+    for (int i = 0; i < numCol; i++) {
+        isPLB[i] = new int[numRow];
+    }
+    Tile*** tileArray = chip.getTileArray();
+    for(int i = 0; i < numCol; i++){
+        for(int j = 0; j < numRow; j++){
+            if(tileArray[i][j] != nullptr && tileArray[i][j]->matchType("PLB")){
+                isPLB[i][j] = 1;
+            }
+            else{
+                isPLB[i][j] = 0;
+            }
+        }
+    }
+    // std::ofstream outputFile;
+    // outputFile.open("isPLB.csv");
+    // for(int i = 0; i < numCol; i++){
+    //     for(int j = 0; j < numRow; j++){
+    //         outputFile<<isPLB[i][j]<<',';
+    //     }
+    //     outputFile<<std::endl;
+    // }
+    // outputFile.close();
+    return 0;
 }

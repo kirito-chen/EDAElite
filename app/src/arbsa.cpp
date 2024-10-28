@@ -134,7 +134,7 @@ Instance* selectInst(Net *net){ //返回在net中随机选取的instance指针
     while (!numbers.empty()) {
         int randomIndex = generate_random_int(0, numbers.size() - 1);
         int index = numbers[randomIndex];
-        
+
         // 创建一个迭代器指向 list 的开始
         std::list<Pin*>::iterator it = pinList.begin();
         // 使用 std::advance 移动迭代器到指定下标
@@ -209,12 +209,12 @@ std::pair<int,int> getNetCenter(bool isBaseline, Net *net){ //返回net的中心
     return std::make_pair(x, y);
 }
 
-bool isValid(bool isBaseline, int x, int y, int& z, Instance* inst){ //判断这个位置是否是PLB，以及是否可插入该inst，如果可插入则返回z值
+bool isValid(bool isBaseline, int x, int y, int& z, Instance* inst){ //判断这个位置是否可插入该inst，如果可插入则返回z值
     bool valid = false;
     Tile* tile = chip.getTile(x, y);
-    if(tile == NULL || tile->matchType("PLB") == false){
-        return false;
-    }
+    // if(tile == NULL || tile->matchType("PLB") == false){
+    //     return false;
+    // }
     std::string instType = inst->getModelName();
     std::string instName = inst->getInstanceName();
     int instId = std::stoi(inst->getInstanceName().substr(5));  // inst_xxx 从第5个字符开始截取，转换为整数
@@ -303,6 +303,22 @@ bool isValid(bool isBaseline, int x, int y, int& z, Instance* inst){ //判断这
     }
     else if(inst->getModelName() == "SEQ"){
         slotArr seqSlotArr = *(tile->getInstanceByType("SEQ"));
+        // 先判断是否有空位子再判断引脚数合法
+        int emptyPos = -1;
+        for(int i = 0; i < 16; i++){
+            Slot *slot = seqSlotArr[i];
+            std::list<int> listTmp;
+            if(isBaseline)  listTmp = slot->getBaselineInstances();
+            else listTmp = slot->getOptimizedInstances();
+            if(listTmp.size() == 0){
+                emptyPos = i;
+                break;
+            }
+        }
+        //没找到空位置
+        if(emptyPos == -1){
+            return false;
+        }
         for (int bank = 0; bank < 2; bank++) {
             // bank0 0-8   bank1 8-16
             int start = bank * 8;
@@ -352,17 +368,8 @@ bool isValid(bool isBaseline, int x, int y, int& z, Instance* inst){ //判断这
             }
             else{
                 // SEQ只要返回一个空位子即可
-                // slotArr seqSlotArr = *(tile->getInstanceByType("SEQ"));
-                for(int i = start; i < end; i++){
-                    Slot *slot = seqSlotArr[i];
-                    std::list<int> listTmp;
-                    if(isBaseline)  listTmp = slot->getBaselineInstances();
-                    else listTmp = slot->getOptimizedInstances();
-                    if(listTmp.size() == 0){
-                        z = i;
-                        return true;
-                    }
-                }
+                z = emptyPos;
+                return true;
             }
         }
     }
@@ -374,17 +381,21 @@ std::tuple<int,int,int> findSuitableLoc(bool isBaseline, int x, int y, int range
   
     // 定义矩形框的左下角和右上角
     int xl = x - rangeDesired, yl = y - rangeDesired, xr = x + rangeDesired, yr = y + rangeDesired;
+    int numCol = chip.getNumCol()-1;
+    int numRow = chip.getNumRow()-1;
     // 判断不超出范围
     if(xl < 0) xl = 0;
     if(yl < 0) yl = 0;
-    if(xr > 150) xr = 150;
-    if(yr > 150) yr = 150;
+    if(xr > numCol) xr = numCol;
+    if(yr > numRow) yr = numRow;
 
     // 生成矩形框内的所有坐标
     std::vector<std::pair<int, int>> coordinates;
     for (int x = xl; x <= xr; ++x) {
         for (int y = yl; y <= yr; ++y) {
-            coordinates.emplace_back(x, y); // 将坐标 (x, y) 加入向量
+            if(isPLB[x][y]){ //只加入PLB块
+                coordinates.emplace_back(x, y); // 将坐标 (x, y) 加入向量
+            }
         }
     }
     int xx, yy, zz = -1; //目标坐标
@@ -462,6 +473,7 @@ int changeTile(bool isBaseline, std::tuple<int, int, int> originLoc, std::tuple<
 int arbsa(bool isBaseline){
     // 记录开始时间
     auto start = std::chrono::high_resolution_clock::now();
+
     // 初始布局
     
     // 构造 fitness 优先级列表 初始化 rangeDesired  
@@ -484,7 +496,7 @@ int arbsa(bool isBaseline){
     // int InnerIter = int( pow(glbInstMap.size(),4/3) ); 
     int InnerIter = int( glbInstMap.size()*0.2 ); 
     // int InnerIter = 100;
-    float T = 100, threashhold = 1e-3, alpha = 0.8; //0.8-0.99
+    float T = 2, threashhold = 1e-3, alpha = 0.8; //0.8-0.99
     // 计算初始cost
     int cost = 0, costNew = 0;
     cost = getWirelength(isBaseline);
@@ -540,7 +552,9 @@ int arbsa(bool isBaseline){
     double standardDeviation = calculateStandardDeviation(sigmaVecInit);
     std::cout<<"------------------------------------------------\n";
     std::cout << "[INFO] Standard Deviation: " << standardDeviation << std::endl;
-    T = 0.5 * standardDeviation;
+    if(standardDeviation != 0){
+        T = 0.5 * standardDeviation;
+    }
     std::cout<<"[INFO] The simulated annealing algorithm starts "<< std::endl;
     std::cout<<"[INFO] initial temperature T= "<< T <<", threshhold= "<<threashhold<<", alpha= "<<alpha<< ", InnerIter= "<<InnerIter<<", seed="<<seed<<std::endl;
 
@@ -551,9 +565,22 @@ int arbsa(bool isBaseline){
         std::vector<int> sigmaVec; 
         // 内层循环 小于内层迭代次数
         while(Iter < InnerIter){
-            // 根据fitness列表选择一个net
-            std::cout<<"[INFO] T:"<< std::scientific << std::setprecision(3) <<T <<" iter:"<<std::setw(4)<<Iter<<" alpha:"<<std::fixed<<std::setprecision(2)<<alpha<<" cost:"<<std::setw(7)<<cost<<std::endl;
+            if(Iter % 100 == 0) {
+                auto tmp = std::chrono::high_resolution_clock::now();
+                // 计算运行时间
+                std::chrono::duration<double> durationtmp = tmp - start;
+                if(durationtmp.count() >= 1180){
+                    timeup = true;
+                    break;
+                }
+                std::cout<<"[INFO] T:"<< std::scientific << std::setprecision(3) <<T <<" iter:"<<std::setw(4)<<Iter<<" alpha:"<<std::fixed<<std::setprecision(2)<<alpha<<" cost:"<<std::setw(7)<<cost<<std::endl;
+            }
+            // std::cout<<"[INFO] T:"<< std::scientific << std::setprecision(3) <<T <<" iter:"<<std::setw(4)<<Iter<<" alpha:"<<std::fixed<<std::setprecision(2)<<alpha<<" cost:"<<std::setw(7)<<cost<<std::endl;
+            if(Iter == 41){
+                int a = 0;
+            }
             Iter++;
+            // 根据fitness列表选择一个net
             int netId = selectNetId(fitnessVec);
             #ifdef DEBUG
                 std::cout<<"DEBUG-netId:"<<netId<<std::endl;
@@ -634,13 +661,6 @@ int arbsa(bool isBaseline){
             if(counterNet == counterNetLimit){
                 rangeDesiredMap = rangeActualMap;
                 counterNet = 0;
-                auto tmp = std::chrono::high_resolution_clock::now();
-                // 计算运行时间
-                std::chrono::duration<double> durationtmp = tmp - start;
-                if(durationtmp.count() >= 1180){
-                    timeup = true;
-                    break;
-                }
             }
         }
         if(timeup) break; //时间快到了，结束

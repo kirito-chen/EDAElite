@@ -45,6 +45,11 @@ public:
 
     bool getClockRegionCoordinate(int instCol, int InstRow, int& clockCol, int& clockRow);
 
+    //获取tileArray数组
+    Tile*** getTileArray() {
+        return tileArray;
+    }
+
 private:
     void createTileArray(int numRow, int numCol);
     void createClockRegionArray(int numRow, int numCol); 

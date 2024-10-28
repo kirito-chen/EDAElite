@@ -9,3 +9,4 @@ void calculateTileRemain();
 void FM();
 void generateOutputFile(bool isBaseline, const std::string &filename);
 std::string getValue(const std::string& jsonContent, const std::string& key);
+int setIsPLB(); 
