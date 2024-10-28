@@ -303,22 +303,6 @@ bool isValid(bool isBaseline, int x, int y, int& z, Instance* inst){ //判断这
     }
     else if(inst->getModelName() == "SEQ"){
         slotArr seqSlotArr = *(tile->getInstanceByType("SEQ"));
-        // 先判断是否有空位子再判断引脚数合法
-        int emptyPos = -1;
-        for(int i = 0; i < 16; i++){
-            Slot *slot = seqSlotArr[i];
-            std::list<int> listTmp;
-            if(isBaseline)  listTmp = slot->getBaselineInstances();
-            else listTmp = slot->getOptimizedInstances();
-            if(listTmp.size() == 0){
-                emptyPos = i;
-                break;
-            }
-        }
-        //没找到空位置
-        if(emptyPos == -1){
-            return false;
-        }
         for (int bank = 0; bank < 2; bank++) {
             // bank0 0-8   bank1 8-16
             int start = bank * 8;
@@ -368,8 +352,17 @@ bool isValid(bool isBaseline, int x, int y, int& z, Instance* inst){ //判断这
             }
             else{
                 // SEQ只要返回一个空位子即可
-                z = emptyPos;
-                return true;
+                // slotArr seqSlotArr = *(tile->getInstanceByType("SEQ"));
+                for(int i = start; i < end; i++){
+                    Slot *slot = seqSlotArr[i];
+                    std::list<int> listTmp;
+                    if(isBaseline)  listTmp = slot->getBaselineInstances();
+                    else listTmp = slot->getOptimizedInstances();
+                    if(listTmp.size() == 0){
+                        z = i;
+                        return true;
+                    }
+                }
             }
         }
     }

@@ -11,6 +11,7 @@ if [ -n "$1" ]; then
     input_timing="WorkSpace/public/Benchmark/public_release/case_${case_number}.timing"
     output_nodes="Result/case_${case_number}_out.nodes"
     $program "$input_nodes" "$input_nets" "$input_timing" "$output_nodes"
+    ./checker/checker checker/case${case_number}.run
 else
     # 循环从 1 到 10
     for i in {1..10}
