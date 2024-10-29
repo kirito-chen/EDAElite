@@ -80,6 +80,17 @@ int main(int argc, char *argv[])
     //生成结果
     generateOutputFile(isBaseline, outFile);
     
+    //保留FM使用记录
+    // else if (tokens[0] == "FM")
+    // {
+    //     calculateTileRemain();
+    //     for (size_t i = 0; i < 3; i++)
+    //     {
+    //         reportWirelength();
+    //         std::cout << "第" << i +1 << "次迭代";
+    //         FM();
+    //     }
+    // }
     // free memory before exit
     for (auto &lib : glbLibMap)
     {

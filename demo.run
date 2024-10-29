@@ -1,8 +1,11 @@
 read_arch WorkSpace/public/Arch/fpga.lib WorkSpace/public/Arch/fpga.scl WorkSpace/public/Arch/fpga.clk
-read_design WorkSpace/public/Benchmark/public_release/case_1.nodes WorkSpace/public/Benchmark/public_release/case_1.nets WorkSpace/public/Benchmark/public_release/case_1.timing
+report_arch
+
+read_design WorkSpace/public/Benchmark/public_release/case_10.nodes WorkSpace/public/Benchmark/public_release/case_10.nets WorkSpace/public/Benchmark/public_release/case_10.timing
 
 SA
+FM
 
-generateResult WorkSpace/public/Test/Reuslt/case_1.nodes.out
+generateResult /home/pc/aibot/wbx/EDAElite/WorkSpace/public/Test/Result/case_10.nodes.out
 
 exit
