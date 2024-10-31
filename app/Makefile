@@ -5,7 +5,7 @@ CC = g++
 
 CFLAGS = -Wall -Wextra -std=c++11
 CFLAGS += -g
-CFLAGS += -o3
+CFLAGS += -o0
 
 all: checker
 

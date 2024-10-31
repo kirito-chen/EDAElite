@@ -10,7 +10,11 @@ add_executable(eda240819 main.cpp)
 
 target_include_directories(eda240819 PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/app/include) 
 
-target_link_libraries(eda240819 PUBLIC engine) 
+target_link_libraries(eda240819 PUBLIC engine)
+
+find_package(Threads REQUIRED)
+
+target_link_libraries(eda240819 PRIVATE ${CMAKE_THREAD_LIBS_INIT})
 
 
 
