@@ -605,11 +605,15 @@ int arbsa(bool isBaseline){
         std::set<int> instRelatedNetId;
         //访问inputpin
         for(auto& pin: inst->getInpins()){
-            instRelatedNetId.insert(pin->getNetID());
+            int netId = pin->getNetID();
+            //-1表示未连接
+            if(netId != -1) instRelatedNetId.insert(pin->getNetID());
         }
         //访问outputpin
         for(auto& pin: inst->getOutpins()){
-            instRelatedNetId.insert(pin->getNetID());
+            int netId = pin->getNetID();
+            //-1表示未连接
+            if(netId != -1) instRelatedNetId.insert(pin->getNetID());
         }
         
         // 计算移动后的newCost

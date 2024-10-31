@@ -3,6 +3,6 @@ build
 .vscode*
 checker
 log
-Result
+Result/*
 call*
 perf*
