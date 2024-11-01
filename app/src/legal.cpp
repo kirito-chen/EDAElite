@@ -53,10 +53,10 @@ bool legalCheck()
     numErrors++;
   }
   // std::cout << "        Optimized placement:" << std::endl;
-  // if (checkClockRegion(false) == false)
-  // {
-  //   numErrors++;
-  // }
+  if (checkClockRegion(false) == false)
+  {
+    numErrors++;
+  }
 
   if (numErrors > 0)
   {

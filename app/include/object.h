@@ -16,6 +16,7 @@
 #define MAX_F7_CAPACITY 4
 #define MAX_F8_CAPACITY 2
 #define MAX_DRAM_CAPACITY 2
+#define MAX_SEQ_CAPACITY = 16 // SEQ组的最大容量
 // # other slots
 #define MAX_RAM_CAPACITY 1
 #define MAX_DSP_CAPACITY 1
@@ -32,6 +33,8 @@
 
 #define MAX_TILE_PIN_INPUT_COUNT 112.0 // 48 LUT input pins + 16 SEQ input pins (D) + 48 SEQ ctrl pins (CE CLK SR)
 #define MAX_TILE_PIN_OUTPUT_COUNT 32.0 // 16 LUT output pins + 16 SEQ output pins
+
+
 
 enum PinProp
 {
@@ -126,6 +129,7 @@ public:
     void clearInstances();
     void clearBaselineInstances();
     void clearOptimizedInstances();
+    void clearLUTandSEQOptimizedInstances(); // 只清理LUT和SEQ
     std::map<std::string, slotArr>::iterator getInstanceMapBegin() { return instanceMap.begin(); }
     std::map<std::string, slotArr>::iterator getInstanceMapEnd() { return instanceMap.end(); }
     slotArr *getInstanceByType(std::string type);
@@ -152,6 +156,9 @@ public:
 
     // cjq modify 返回tile的instTypes类型的可插入的offset  // LUT  SEQ
     int findOffset(std::string instTypes, Instance *inst, bool isBaseline);
+    int getLUTCount() const;
+
+    std::vector<std::set<Instance*>> getFixedOptimizedLUTGroups() const;
 };
 
 class ClockRegion
@@ -292,6 +299,10 @@ class Instance
     int matchedLUTID;               // 用于存储与当前LUT匹配的LUT实例ID
 
     bool isMatch;
+    int plbGroupID;
+    int lutSetID;       //指定LUT的LUT组编号
+
+    bool lutInitialed; // 这个是用来确保LUT类型的instance在updateInstancesToTiles只被调整一次位置，默认为false
 
 public:
     Instance();
@@ -314,6 +325,9 @@ public:
 
     bool isFixed() const { return fixed; }
     void setFixed(bool value) { fixed = value; }
+    
+    bool isLUTInitial() const { return lutInitialed; }
+    void setLUTInitial(bool _isLUTInitial) { lutInitialed = _isLUTInitial; }
 
     std::string getInstanceName() const { return instanceName; }
     void setInstanceName(const std::string &name) { instanceName = name; }
@@ -352,6 +366,18 @@ public:
     std::vector<int> getMovableRegion() { return movableRegion; }
 
     // void connectOutpin(int netID, int idx) { outpins[idx].setNetID(netID); }
+    void setPLBGroupID(int plbID) { plbGroupID = plbID; }
+    int getPLBGroupID() { return plbGroupID; }
+
+    void setLUTSetID(int _lutsetID) { lutSetID = _lutsetID; }
+    int getLUTSetID() { return lutSetID; }
+
+    int getInstID()
+    {
+        size_t underscorePos = instanceName.find('_');                                                        // 找到下划线的位置
+        return (underscorePos != std::string::npos) ? std::stoi(instanceName.substr(underscorePos + 1)) : -1; // 提取并转换
+    }
+
 };
 
 class Net
@@ -409,6 +435,8 @@ public:
 
     // report util
     bool reportNet();
+
+    std::vector<Pin *> getPins();
 };
 
 class PLBPlacement
@@ -425,7 +453,7 @@ public:
     PLBPlacement() : plbID(-1)
     {
         location = std::tuple<int, int>(-1, -1);
-        isFixed = true;
+        isFixed = false;
     }
 
     // 带有 ID 的构造函数
@@ -437,7 +465,10 @@ public:
 
     // 获取和设置位置
     std::tuple<int, int> getLocation() const { return location; }
-    void setPLBLocation(int x, int y) { location = std::make_tuple(x, y); }
+    void setPLBLocation(const std::tuple<int, int> &loc)
+    {
+        location = loc;
+    }
 
     // 获取和更新连接的 nets
     const std::set<int> &getConnectedNets() const { return connectedNets; }
@@ -446,6 +477,8 @@ public:
     // 获取和设置 LUT 组
     const std::vector<std::set<Instance *>> &getLUTGroups() const { return lutGroups; }
     void addLUTGroup(const std::set<Instance *> &lutGroup) { lutGroups.push_back(lutGroup); }
+
+    bool getFixed() const { return isFixed; }
 
     // 获取 PLB 内的总 LUT 数
     int getTotalLUTCount() const
@@ -458,7 +491,6 @@ public:
         return count;
     }
 
-    bool getFixed() { return isFixed; }
     void setFixed(bool isfix) { isFixed = isfix; }
 };
 
@@ -477,7 +509,6 @@ public:
     // 默认构造函数
     SEQBankPlacement() : bankID(-1)
     {
-        
     }
 
     // 构造函数
@@ -540,4 +571,7 @@ public:
     // 设置和获取是否固定
     bool getFixed() const { return isFixed; }
     void setFixed(bool fixed) { isFixed = fixed; }
+
+    // 获取 SEQ 实例列表
+    const std::vector<Instance *> &getSEQInstances() const { return seqInstances; }
 };

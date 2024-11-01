@@ -74,6 +74,45 @@ bool Tile::addInstance(int instID, int offset, std::string modelType, const bool
   return true;
 }
 
+std::vector<std::set<Instance *>> Tile::getFixedOptimizedLUTGroups() const
+{
+  std::unordered_map<int, std::set<Instance *>> lutGroupMap; // 按照 lutSetID 分组
+  std::vector<std::set<Instance *>> optimizedLUTGroups;
+
+  // 遍历实例映射，根据类型筛选出固定的LUT实例
+  for (const auto &entry : instanceMap)
+  {
+    const std::string &type = entry.first;
+    const slotArr &slots = entry.second;
+
+    if (type.substr(0, 3) == "LUT") // 只处理LUT类型的实例
+    {
+      for (const auto &slot : slots)
+      {
+        const auto &optimizedInstances = slot->getOptimizedInstances();
+        for (int instID : optimizedInstances)
+        {
+          // 查找实例对象
+          Instance *lutInstance = glbInstMap[instID]; // 假设 glbInstMap 是全局实例映射
+          if (lutInstance->isFixed())
+          {
+            int lutSetID = lutInstance->getLUTSetID(); // 获取 lutSetID
+            lutGroupMap[lutSetID].insert(lutInstance); // 按 lutSetID 分组
+          }
+        }
+      }
+    }
+  }
+
+  // 将每个 lutSetID 的分组添加到返回的结果中
+  for (auto &pair : lutGroupMap)
+  {
+    optimizedLUTGroups.push_back(pair.second); // 只添加非空组
+  }
+
+  return optimizedLUTGroups; // 返回按 lutSetID 分组的LUT组
+}
+
 void Tile::clearInstances()
 {
   for (auto &pair : instanceMap)
@@ -103,6 +142,21 @@ void Tile::clearOptimizedInstances()
     for (auto &slot : pair.second)
     {
       slot->clearOptimizedInstances();
+    }
+  }
+}
+
+// 只清理LUT和SEQ
+void Tile::clearLUTandSEQOptimizedInstances()
+{
+  for (auto &pair : instanceMap)
+  {
+    if (pair.first == "LUT" || pair.first == "SEQ")
+    {
+      for (auto &slot : pair.second)
+      {
+        slot->clearOptimizedInstances();
+      }
     }
   }
 }
@@ -1134,6 +1188,48 @@ int Tile::findOffset(std::string instTypes, Instance *inst, bool isBaseline)
   return offset;
 }
 
+// 获取当前 tile 内部有多少空的 LUT 组，最多会有 8 个空的，假设一个 LUT site 里面有值，则少一个
+int Tile::getLUTCount() const
+{
+  int count = 0;
+  for (const auto &entry : instanceMap)
+  {
+    const std::string &type = entry.first; // 获取当前 Slot 的类型
+    if (type.substr(0, 3) == "LUT")        // 检查是否为 LUT 类型
+    {
+      const slotArr &slots = entry.second; // 获取对应的 Slot 数组
+      for (const auto &slot : slots)
+      {
+        if (slot->getOptimizedInstances().size() > 0) // 如果该 slot 有实例
+        {
+          count += 1; // 增加已用的 LUT 计数
+        }
+      }
+    }
+    if (type.substr(0, 3) == "DRA")
+    {
+      const slotArr &slots = entry.second; // 获取对应的 Slot 数组
+      for (const auto &slot : slots)
+      {
+        if (slot->getOptimizedInstances().size() > 0) // 如果该 slot 有实例
+        {
+          count += 4; // 增加已用的 LUT 计数,对于DRAM，是4个LUT
+        }
+      }
+    }
+  }
+
+  int availableLUTs = MAX_LUT_CAPACITY - count; // 计算空的 LUT 数量
+
+  // // 检查 DRAM 资源的存在，若有则减少 4 个可用的 LUT 资源
+  // if (containsDRAM())
+  // {
+  //     availableLUTs -= 4;
+  // }
+
+  return availableLUTs > 0 ? availableLUTs : 0; // 确保可用的 LUT 数量不会低于 0
+}
+
 // 获取当前inst已使用的pin
 std::set<int> Tile::getUsedPins(Instance *inst)
 {
@@ -1194,6 +1290,9 @@ Instance::Instance()
   movableRegion.assign(4, -1);
   isMatch = false;
   matchedLUTID = -1;
+  plbGroupID = -1;
+  lutInitialed = false;
+  lutSetID = -1;
 }
 
 bool Instance::isPlaced()
@@ -1859,4 +1958,23 @@ bool Net::reportNet()
   // }
 
   return true;
+}
+
+std::vector<Pin *> Net::getPins()
+{
+  std::vector<Pin *> allPins;
+
+  // 添加输入引脚
+  if (inpin)
+  {
+    allPins.push_back(inpin);
+  }
+
+  // 添加输出引脚
+  for (Pin *pin : outputPins)
+  {
+    allPins.push_back(pin);
+  }
+
+  return allPins;
 }

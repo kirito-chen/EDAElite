@@ -23,6 +23,13 @@ void updatePLBLocations(std::map<int, std::set<std::set<Instance*>>> &plbGroups)
 // void buildGlobalPLBPlacement(const std::map<int, std::set<std::set<Instance *>>> &plbGroups);
 void initializePLBPlacementMap(const std::map<int, std::set<std::set<Instance*>>> &plbGroups);
 void initializeSEQPlacementMap(const std::map<int, Instance*>& glbInstMap);
-
-
+void initializePLBGroupLocations(std::unordered_map<int, PLBPlacement>& plbPlacementMap);
+void initializeSEQGroupLocations(std::unordered_map<int, SEQBankPlacement>& seqPlacementMap);
+void updateLUTLocations(std::unordered_map<int, PLBPlacement>& plbPlacementMap);
+void updateSEQLocations(std::unordered_map<int, SEQBankPlacement> &seqBankMap);
+bool updateInstancesToTiles();
+void printPLBInformation();
+std::vector<std::tuple<int, int>> getNeighborTiles(int x, int y, int maxCols, int maxRows);
+bool compareOuterSets(const std::set<std::set<Instance*>>& a, const std::set<std::set<Instance*>>& b);
+void sortPLBGrouptList(std::vector<std::set<std::set<Instance*>>>& nonFixedPLBGrouptList);
 
