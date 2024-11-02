@@ -159,6 +159,7 @@ public:
     int getLUTCount() const;
 
     std::vector<std::set<Instance*>> getFixedOptimizedLUTGroups() const;
+    std::vector<int> getFixedOptimizedDRAMGroups() const;
 };
 
 class ClockRegion

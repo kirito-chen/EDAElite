@@ -113,6 +113,34 @@ std::vector<std::set<Instance *>> Tile::getFixedOptimizedLUTGroups() const
   return optimizedLUTGroups; // 返回按 lutSetID 分组的LUT组
 }
 
+// 获取tile下的DRAM
+std::vector<int> Tile::getFixedOptimizedDRAMGroups() const
+{
+  std::vector<int> FixedOptimizedDRAMInstance;
+
+  // 遍历实例映射，根据类型筛选出DRAM实例
+  for (const auto &entry : instanceMap)
+  {
+    const std::string &type = entry.first;
+    const slotArr &slots = entry.second;
+
+    if (type.substr(0, 3) == "DRA") // 只处理LUT类型的实例
+    {
+      int count = 0;
+      for (const auto &slot : slots)
+      {
+        const auto &optimizedInstances = slot->getOptimizedInstances();
+        for (int instID : optimizedInstances)
+        {
+          FixedOptimizedDRAMInstance.push_back(count);
+        }
+        count++;
+      }
+    }
+  }
+  return FixedOptimizedDRAMInstance;
+}
+
 void Tile::clearInstances()
 {
   for (auto &pair : instanceMap)
@@ -1220,12 +1248,6 @@ int Tile::getLUTCount() const
   }
 
   int availableLUTs = MAX_LUT_CAPACITY - count; // 计算空的 LUT 数量
-
-  // // 检查 DRAM 资源的存在，若有则减少 4 个可用的 LUT 资源
-  // if (containsDRAM())
-  // {
-  //     availableLUTs -= 4;
-  // }
 
   return availableLUTs > 0 ? availableLUTs : 0; // 确保可用的 LUT 数量不会低于 0
 }

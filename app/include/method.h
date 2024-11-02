@@ -5,7 +5,7 @@
 #include "object.h"
 #include "arch.h"
 #include "global.h"
-
+#include "legal.h"
 
 #include <unordered_map>
 #include <unordered_set>
@@ -32,4 +32,6 @@ void printPLBInformation();
 std::vector<std::tuple<int, int>> getNeighborTiles(int x, int y, int maxCols, int maxRows);
 bool compareOuterSets(const std::set<std::set<Instance*>>& a, const std::set<std::set<Instance*>>& b);
 void sortPLBGrouptList(std::vector<std::set<std::set<Instance*>>>& nonFixedPLBGrouptList);
-
+void matchFixedLUTGroupsToPLB(std::map<int, std::set<Instance *>> &lutGroups, std::map<int, std::set<std::set<Instance *>>> &plbGroups);
+void printInstanceInformation();
+std::tuple<int, int> getNeighborTile(int x, int y);
