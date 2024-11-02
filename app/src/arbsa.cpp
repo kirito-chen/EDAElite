@@ -487,9 +487,9 @@ int arbsa(bool isBaseline){
     // 初始化迭代次数Iter、初始化温度T
     int Iter = 0;
     // int InnerIter = int( pow(glbInstMap.size(),4/3) ); 
-    int InnerIter = int( glbInstMap.size()*0.2 ); 
+    int InnerIter = 2000; // int( glbInstMap.size()*0.2 ); 
     // int InnerIter = 100;
-    float T = 2, threashhold = 1e-3, alpha = 0.8; //0.8-0.99
+    float T = 2, threashhold = 0, alpha = 0.8; //0.8-0.99
     // 计算初始cost
     int cost = 0, costNew = 0;
     cost = getWirelength(isBaseline);
