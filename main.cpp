@@ -16,6 +16,9 @@
 #include "test.h"
 #include "arbsa.h"
 
+#include "global_placement_sa.h"
+
+#include <chrono>
 
 int main(int argc, char *argv[])
 {

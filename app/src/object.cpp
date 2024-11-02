@@ -74,6 +74,117 @@ bool Tile::addInstance(int instID, int offset, std::string modelType, const bool
   return true;
 }
 
+// 获取当前instance的seq占用bank的情况
+std::vector<int> Tile::getSeqInstanceBankNum()
+{
+  std::vector<int> seqBankNum;
+  bool zeroBankFlag = false;
+  bool oneBankFlag = false;
+
+  // 遍历实例映射，根据类型筛选出 SEQ 实例
+  for (const auto &entry : instanceMap)
+  {
+    const std::string &type = entry.first;
+    const slotArr &slots = entry.second;
+
+    if (type.substr(0, 3) == "SEQ") // 只处理 SEQ 类型的实例
+    {
+      // 遍历每个槽位
+      for (size_t i = 0; i < slots.size(); ++i)
+      {
+        const auto &optimizedInstances = slots[i]->getOptimizedInstances();
+
+        // 如果该槽位有实例且i属于8-15
+        if (!optimizedInstances.empty() && i > 7)
+        {
+          oneBankFlag = true;
+        }
+        // 如果该槽位有实例且i属于0-7
+        if (!optimizedInstances.empty() && i <= 7)
+        {
+          zeroBankFlag = true;
+        }
+      }
+    }
+  }
+  if (zeroBankFlag)
+  {
+    seqBankNum.push_back(0);
+  }
+  if (oneBankFlag)
+  {
+    seqBankNum.push_back(1);
+  }
+  return seqBankNum; // 返回所有 SEQ 实例在各个 Bank 的占用情况
+}
+
+std::vector<std::set<Instance *>> Tile::getFixedOptimizedLUTGroups() const
+{
+  std::unordered_map<int, std::set<Instance *>> lutGroupMap; // 按照 lutSetID 分组
+  std::vector<std::set<Instance *>> optimizedLUTGroups;
+
+  // 遍历实例映射，根据类型筛选出固定的LUT实例
+  for (const auto &entry : instanceMap)
+  {
+    const std::string &type = entry.first;
+    const slotArr &slots = entry.second;
+
+    if (type.substr(0, 3) == "LUT") // 只处理LUT类型的实例
+    {
+      for (const auto &slot : slots)
+      {
+        const auto &optimizedInstances = slot->getOptimizedInstances();
+        for (int instID : optimizedInstances)
+        {
+          // 查找实例对象
+          Instance *lutInstance = glbInstMap[instID]; // 假设 glbInstMap 是全局实例映射
+          if (lutInstance->isFixed())
+          {
+            int lutSetID = lutInstance->getLUTSetID(); // 获取 lutSetID
+            lutGroupMap[lutSetID].insert(lutInstance); // 按 lutSetID 分组
+          }
+        }
+      }
+    }
+  }
+
+  // 将每个 lutSetID 的分组添加到返回的结果中
+  for (auto &pair : lutGroupMap)
+  {
+    optimizedLUTGroups.push_back(pair.second); // 只添加非空组
+  }
+
+  return optimizedLUTGroups; // 返回按 lutSetID 分组的LUT组
+}
+
+// 获取tile下的DRAM
+std::vector<int> Tile::getFixedOptimizedDRAMGroups() const
+{
+  std::vector<int> FixedOptimizedDRAMInstance;
+
+  // 遍历实例映射，根据类型筛选出DRAM实例
+  for (const auto &entry : instanceMap)
+  {
+    const std::string &type = entry.first;
+    const slotArr &slots = entry.second;
+
+    if (type.substr(0, 3) == "DRA") // 只处理LUT类型的实例
+    {
+      int count = 0;
+      for (const auto &slot : slots)
+      {
+        const auto &optimizedInstances = slot->getOptimizedInstances();
+        for (int instID : optimizedInstances)
+        {
+          FixedOptimizedDRAMInstance.push_back(count);
+        }
+        count++;
+      }
+    }
+  }
+  return FixedOptimizedDRAMInstance;
+}
+
 void Tile::clearInstances()
 {
   for (auto &pair : instanceMap)
@@ -103,6 +214,21 @@ void Tile::clearOptimizedInstances()
     for (auto &slot : pair.second)
     {
       slot->clearOptimizedInstances();
+    }
+  }
+}
+
+// 只清理LUT和SEQ
+void Tile::clearLUTandSEQOptimizedInstances()
+{
+  for (auto &pair : instanceMap)
+  {
+    if (pair.first == "LUT" || pair.first == "SEQ")
+    {
+      for (auto &slot : pair.second)
+      {
+        slot->clearOptimizedInstances();
+      }
     }
   }
 }
@@ -451,31 +577,35 @@ bool Tile::hasEnoughResources(Instance *inst)
   return false;
 }
 
+bool Tile::removeInstance(Instance *inst)
+{
+  std::string modelType = inst->getModelName();
+  std::string unifiedModelType = unifyModelType(modelType);
 
-bool Tile::removeInstance(Instance *inst) {
-    std::string modelType = inst->getModelName();
-    std::string unifiedModelType = unifyModelType(modelType);
+  // 查找实例类型对应的Slot数组
+  auto mapIter = instanceMap.find(unifiedModelType);
+  if (mapIter == instanceMap.end())
+  {
+    std::cout << "Error: Slot type not found for model " << modelType << std::endl;
+    return false;
+  }
 
-    // 查找实例类型对应的Slot数组
-    auto mapIter = instanceMap.find(unifiedModelType);
-    if (mapIter == instanceMap.end()) {
-        std::cout << "Error: Slot type not found for model " << modelType << std::endl;
-        return false;
+  // 遍历Slot，查找并移除该实例
+  for (Slot *slot : mapIter->second)
+  {
+    std::list<int> &instances = slot->getBaselineInstances(); // 获取优化后的实例列表引用
+    for (auto it = instances.begin(); it != instances.end(); ++it)
+    {
+      if (*it == std::stoi(inst->getInstanceName().substr(5)))
+      {                      // 移除以inst_xxx的形式表示的实例
+        instances.erase(it); // 找到实例并移除
+        return true;         // 成功移除，返回true
+      }
     }
+  }
 
-    // 遍历Slot，查找并移除该实例
-    for (Slot *slot : mapIter->second) {
-        std::list<int>& instances = slot->getBaselineInstances(); // 获取优化后的实例列表引用
-        for (auto it = instances.begin(); it != instances.end(); ++it) {
-            if (*it == std::stoi(inst->getInstanceName().substr(5))) {  // 移除以inst_xxx的形式表示的实例
-                instances.erase(it); // 找到实例并移除
-                return true;         // 成功移除，返回true
-            }
-        }
-    }
-
-    std::cout << "Error: Instance not found in tile" << std::endl;
-    return false; // 未找到实例，返回false
+  // std::cout << "Error: Instance not found in tile" << std::endl;
+  return false; // 未找到实例，返回false
 }
 
 bool Tile::initTile(const std::string &tileType)
@@ -988,36 +1118,45 @@ void Tile::getRemainingPLBResources(bool isBaseline)
 int Tile::findOffset(std::string instTypes, Instance *inst, bool isBaseline)
 {
   int offset = -1;
-  if(instTypes == "LUT"){
-    std::vector<int> pinNum(8,0);   // 记录对应lut位置能放下的引脚 -1为不可放置
-    //获取int相关的net
+  if (instTypes == "LUT")
+  {
+    std::vector<int> pinNum(8, 0); // 记录对应lut位置能放下的引脚 -1为不可放置
+    // 获取int相关的net
     std::set<Net *> netSet = inst->getRelatedNets();
-    std::set<int> netIdSet; //net ID 的set
-    for(auto net : netSet){
+    std::set<int> netIdSet; // net ID 的set
+    for (auto net : netSet)
+    {
       netIdSet.insert(net->getId());
     }
 
     slotArr slotArrTmp = instanceMap[instTypes];
-    for(int i = 0; i < slotArrTmp.size(); i++){
+    for (int i = 0; i < slotArrTmp.size(); i++)
+    {
       Slot *slot = slotArrTmp[i];
       std::list<int> listTmp;
-      if(isBaseline)  listTmp = slot->getBaselineInstances();
-      else listTmp = slot->getOptimizedInstances();
-      //当已经插入的inst大于等于2则不考虑了
-      if(listTmp.size() >= 2){
+      if (isBaseline)
+        listTmp = slot->getBaselineInstances();
+      else
+        listTmp = slot->getOptimizedInstances();
+      // 当已经插入的inst大于等于2则不考虑了
+      if (listTmp.size() >= 2)
+      {
         pinNum[i] = -1;
       }
-      else if(listTmp.size() == 1){
+      else if (listTmp.size() == 1)
+      {
         int instIdTmp = listTmp.front();
         Instance *instTmp = glbInstMap[instIdTmp];
         std::set<Net *> netSetTmp = instTmp->getRelatedNets();
-        std::set<int> netIdSetTmp; 
-        for(auto net : netSetTmp){
+        std::set<int> netIdSetTmp;
+        for (auto net : netSetTmp)
+        {
           netIdSetTmp.insert(net->getId());
         }
         // 假设插入当前inst
-        for(int i : netIdSet){
-          netIdSetTmp.insert(i); //重复的会被过滤掉
+        for (int i : netIdSet)
+        {
+          netIdSetTmp.insert(i); // 重复的会被过滤掉
         }
         pinNum[i] = netIdSetTmp.size();
       }
@@ -1025,36 +1164,45 @@ int Tile::findOffset(std::string instTypes, Instance *inst, bool isBaseline)
     // 找到不大于6的最大的引脚的下标
     int maxVal = -1; // 用来存储不大于6的最大数
     int index = -1;  // 用来存储该数的下标
-    for (int i = 0; i < pinNum.size(); ++i) {
-        if (pinNum[i] <= 6 && pinNum[i] > maxVal) {
-            maxVal = pinNum[i];
-            index = i;
-        }
+    for (int i = 0; i < pinNum.size(); ++i)
+    {
+      if (pinNum[i] <= 6 && pinNum[i] > maxVal)
+      {
+        maxVal = pinNum[i];
+        index = i;
+      }
     }
     offset = index;
   }
-  else if(instTypes == "SEQ"){
-    int instID = std::stoi(inst->getInstanceName().substr(5));  // 从第5个字符开始截取，转换为整数
+  else if (instTypes == "SEQ")
+  {
+    int instID = std::stoi(inst->getInstanceName().substr(5)); // 从第5个字符开始截取，转换为整数
     slotArr slotArrTmp = instanceMap[instTypes];
-    for(int j = 0; j < 2; j++){
-      //bank0-1
+    for (int j = 0; j < 2; j++)
+    {
+      // bank0-1
       std::set<int> bankId;
       bankId.insert(instID);
-      for(int i = j*8; i < (j+1)*8; i++){
-        Slot* slotTmp = slotArrTmp[i];
+      for (int i = j * 8; i < (j + 1) * 8; i++)
+      {
+        Slot *slotTmp = slotArrTmp[i];
         std::list<int> instListTmp;
-        if(isBaseline) instListTmp = slotTmp->getBaselineInstances();
-        else instListTmp = slotTmp->getOptimizedInstances();
-        for(int id : instListTmp){
+        if (isBaseline)
+          instListTmp = slotTmp->getBaselineInstances();
+        else
+          instListTmp = slotTmp->getOptimizedInstances();
+        for (int id : instListTmp)
+        {
           bankId.insert(id);
         }
       }
-      //判断每个inst的引脚
-      std::set<int> clkNets; //不超过1
-      std::set<int> ceNets; //不超过2
-      std::set<int> srNets; //不超过1
-      for(int i : bankId){
-        Instance* instPtr = glbInstMap[i];
+      // 判断每个inst的引脚
+      std::set<int> clkNets; // 不超过1
+      std::set<int> ceNets;  // 不超过2
+      std::set<int> srNets;  // 不超过1
+      for (int i : bankId)
+      {
+        Instance *instPtr = glbInstMap[i];
         int numInpins = instPtr->getNumInpins();
         for (int i = 0; i < numInpins; i++)
         {
@@ -1079,24 +1227,29 @@ int Tile::findOffset(std::string instTypes, Instance *inst, bool isBaseline)
         }
       }
 
-      int numClk = clkNets.size();      
-      int numReset = srNets.size();    
+      int numClk = clkNets.size();
+      int numReset = srNets.size();
       int numCe = ceNets.size();
 
-      if (numClk > MAX_TILE_CLOCK_PER_PLB_BANK || numCe > MAX_TILE_CE_PER_PLB_BANK 
-      || numReset > MAX_TILE_RESET_PER_PLB_BANK) {
+      if (numClk > MAX_TILE_CLOCK_PER_PLB_BANK || numCe > MAX_TILE_CE_PER_PLB_BANK || numReset > MAX_TILE_RESET_PER_PLB_BANK)
+      {
         offset = -1;
         return offset;
       }
-      else{
+      else
+      {
         // SEQ只要返回一个空位子即可
         slotArr slotArrTmp = instanceMap[instTypes];
-        for(int i = j*8; i < (j+1)*8; i++){
+        for (int i = j * 8; i < (j + 1) * 8; i++)
+        {
           Slot *slot = slotArrTmp[i];
           std::list<int> listTmp;
-          if(isBaseline)  listTmp = slot->getBaselineInstances();
-          else listTmp = slot->getOptimizedInstances();
-          if(listTmp.size() == 0){
+          if (isBaseline)
+            listTmp = slot->getBaselineInstances();
+          else
+            listTmp = slot->getOptimizedInstances();
+          if (listTmp.size() == 0)
+          {
             offset = i;
             break;
           }
@@ -1105,6 +1258,42 @@ int Tile::findOffset(std::string instTypes, Instance *inst, bool isBaseline)
     }
   }
   return offset;
+}
+
+// 获取当前 tile 内部有多少空的 LUT 组，最多会有 8 个空的，假设一个 LUT site 里面有值，则少一个
+int Tile::getLUTCount() const
+{
+  int count = 0;
+  for (const auto &entry : instanceMap)
+  {
+    const std::string &type = entry.first; // 获取当前 Slot 的类型
+    if (type.substr(0, 3) == "LUT")        // 检查是否为 LUT 类型
+    {
+      const slotArr &slots = entry.second; // 获取对应的 Slot 数组
+      for (const auto &slot : slots)
+      {
+        if (slot->getOptimizedInstances().size() > 0) // 如果该 slot 有实例
+        {
+          count += 1; // 增加已用的 LUT 计数
+        }
+      }
+    }
+    if (type.substr(0, 3) == "DRA")
+    {
+      const slotArr &slots = entry.second; // 获取对应的 Slot 数组
+      for (const auto &slot : slots)
+      {
+        if (slot->getOptimizedInstances().size() > 0) // 如果该 slot 有实例
+        {
+          count += 4; // 增加已用的 LUT 计数,对于DRAM，是4个LUT
+        }
+      }
+    }
+  }
+
+  int availableLUTs = MAX_LUT_CAPACITY - count; // 计算空的 LUT 数量
+
+  return availableLUTs > 0 ? availableLUTs : 0; // 确保可用的 LUT 数量不会低于 0
 }
 
 // 获取当前inst已使用的pin
@@ -1165,6 +1354,12 @@ Instance::Instance()
   setLocation(std::make_tuple(-1, -1, -1));
   setBaseLocation(std::make_tuple(-1, -1, -1));
   movableRegion.assign(4, -1);
+  isMatch = false;
+  matchedLUTID = -1;
+  plbGroupID = -1;
+  lutInitialed = false;
+  lutSetID = -1;
+  seqGroupID = -1;
 }
 
 bool Instance::isPlaced()
@@ -1275,7 +1470,7 @@ void Instance::calculateAllRelatedNetHPWL(bool isBaseline)
   // 遍历每个相关的net，累加其HPWL
   for (Net *net : relatedNets)
   {
-    // net->setNetHPWL(false);                  // 更新一下net的线长
+    // net->setNetHPWL(isBaseline);                  // 更新一下net的线长
     allRelatedNetHPWL += net->getCritHPWL(); // 累加net的CritHPWL
     allRelatedNetHPWL += net->getHPWL();     // 累加net的HPWL
   }
@@ -1296,15 +1491,15 @@ void Instance::updateInstRelatedNet(bool isBaseline)
   // 遍历每个相关的net，累加其HPWL
   for (Net *net : relatedNets)
   {
-    net->setNetHPWL(false);                  // 更新一下net的线长
+    net->setNetHPWL(isBaseline);             // 更新一下net的线长
     allRelatedNetHPWL += net->getCritHPWL(); // 累加net的CritHPWL
     allRelatedNetHPWL += net->getHPWL();     // 累加net的HPWL
   }
-  // cjq modify 24.10.20 平均
-  if (relatedNets.size() > 0)
-    allRelatedNetHPWLAver = allRelatedNetHPWL / relatedNets.size();
-  else
-    allRelatedNetHPWLAver = 0;
+  // // cjq modify 24.10.20 平均
+  // if (relatedNets.size() > 0)
+  //   allRelatedNetHPWLAver = allRelatedNetHPWL / relatedNets.size();
+  // else
+  //   allRelatedNetHPWLAver = 0;
 }
 
 // 计算instance的可移动区域
@@ -1830,4 +2025,23 @@ bool Net::reportNet()
   // }
 
   return true;
+}
+
+std::vector<Pin *> Net::getPins()
+{
+  std::vector<Pin *> allPins;
+
+  // 添加输入引脚
+  if (inpin)
+  {
+    allPins.push_back(inpin);
+  }
+
+  // 添加输出引脚
+  for (Pin *pin : outputPins)
+  {
+    allPins.push_back(pin);
+  }
+
+  return allPins;
 }
