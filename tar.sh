@@ -1,0 +1,1 @@
+tar -czvf EDAElite.tar.gz app/ checker/ main.cpp config.json CMakeLists.txt compile.sh run.sh

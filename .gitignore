@@ -6,3 +6,6 @@ log
 Result/*
 call*
 perf*
+FlameGraph
+getFlameGraph.sh
+*tar.gz

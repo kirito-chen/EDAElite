@@ -19,8 +19,8 @@ if [ -n "$1" ]; then
 else
     # 清空Result文件夹
     rm -f Result/*
-    # 循环从 1 到 10
-    for i in {1..10}
+    # 循环从 1 到 11
+    for i in {1..11}
     do
         # 构造文件名
         echo ready to run case${i}

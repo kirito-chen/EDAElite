@@ -83,6 +83,7 @@ int calculrangeMap(bool isBaseline, std::map<int, int>& rangeActualMap){
             if(minY > y) minY = y;
         }
         int netDesired = std::ceil((maxX-minX+maxY-minY)/2);
+        // int netDesired = std::ceil((maxX-minX+maxY-minY));
         rangeActualMap[net->getId()] = netDesired;
     }
     return 0;
@@ -124,6 +125,7 @@ int calculRelatedRangeMap(bool isBaseline, std::map<int, int>& rangeActualMap, c
             if(minY > y) minY = y;
         }
         int netDesired = std::ceil((maxX-minX+maxY-minY)/2);
+        // int netDesired = std::ceil((maxX-minX+maxY-minY));
         rangeActualMap[net->getId()] = netDesired;
     }
     return 0;
@@ -568,17 +570,17 @@ int arbsa(bool isBaseline){
 
     // 初始化迭代次数Iter、初始化温度T
     int Iter = 0;
-    // int InnerIter = int( pow(glbInstMap.size(),4/3) ); 
-    int InnerIter = int( glbInstMap.size()*0.2 ); 
-    // int InnerIter = 100;
-    float T = 2, threashhold = 1e-3, alpha = 0.8; //0.8-0.99
+    int InnerIter = 2000; //int( glbInstMap.size()*0.2 );  int( pow(glbInstMap.size(),4/3) ); 
+    float T = 2;
+    float threashhold = 0; //1e-5
+    float alpha = 0.8; //0.8-0.99
     // 计算初始cost
     int cost = 0, costNew = 0;
     cost = getWirelength(isBaseline);
     // cost = getHPWL(isBaseline);
     //自适应参数
     int counterNet = 0;
-    const int counterNetLimit = 100;
+    const int counterNetLimit = 800;
     const int seed = 999;
     set_random_seed(seed);
 
@@ -735,8 +737,9 @@ int arbsa(bool isBaseline){
             // if deta < 0 更新这个操作到布局中，更新fitness列表
             if(deta < 0){
                 changeTile(isBaseline, originLoc, loc, inst);
-                calculRelatedRangeMap(isBaseline, rangeActualMap, instRelatedNetId);
-                calculRelatedFitness(fitnessVec, rangeDesiredMap, rangeActualMap, instRelatedNetId);
+                // 间隔次数多了再更新这两
+                // calculRelatedRangeMap(isBaseline, rangeActualMap, instRelatedNetId);
+                // calculRelatedFitness(fitnessVec, rangeDesiredMap, rangeActualMap, instRelatedNetId);
                 cost = costNew;
                 sigmaVec.emplace_back(costNew);
                 // sortedFitness(fitnessVec);
@@ -751,8 +754,9 @@ int arbsa(bool isBaseline){
                 #endif
                 if(randomValue < eDetaT){
                     changeTile(isBaseline, originLoc, loc, inst);
-                    calculRelatedRangeMap(isBaseline, rangeActualMap, instRelatedNetId);
-                    calculRelatedFitness(fitnessVec, rangeDesiredMap, rangeActualMap, instRelatedNetId);
+                    // 间隔次数多了再更新这两
+                    // calculRelatedRangeMap(isBaseline, rangeActualMap, instRelatedNetId);
+                    // calculRelatedFitness(fitnessVec, rangeDesiredMap, rangeActualMap, instRelatedNetId);
                     cost = costNew;
                     sigmaVec.emplace_back(costNew);
                 }
@@ -766,6 +770,10 @@ int arbsa(bool isBaseline){
             }
             // counterNet 计数+1
             counterNet += 1;
+            if(counterNet % 100 == 0){
+                calculRelatedRangeMap(isBaseline, rangeActualMap, instRelatedNetId);
+                calculRelatedFitness(fitnessVec, rangeDesiredMap, rangeActualMap, instRelatedNetId);
+            }
             // 当计数等于一个限制时，更新rangeActual 到 rangeDesired
             if(counterNet == counterNetLimit){
                 rangeDesiredMap = rangeActualMap;
