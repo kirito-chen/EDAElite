@@ -160,6 +160,9 @@ public:
 
     std::vector<std::set<Instance*>> getFixedOptimizedLUTGroups() const;
     std::vector<int> getFixedOptimizedDRAMGroups() const;
+
+    
+    std::vector<int> getSeqInstanceBankNum();
 };
 
 class ClockRegion
@@ -304,6 +307,7 @@ class Instance
     int lutSetID;       //指定LUT的LUT组编号
 
     bool lutInitialed; // 这个是用来确保LUT类型的instance在updateInstancesToTiles只被调整一次位置，默认为false
+    int seqGroupID;
 
 public:
     Instance();
@@ -373,12 +377,13 @@ public:
     void setLUTSetID(int _lutsetID) { lutSetID = _lutsetID; }
     int getLUTSetID() { return lutSetID; }
 
+    void setSEQID(int _seqID) { seqGroupID = _seqID; }
+    int getSEQID() { return seqGroupID; }
     int getInstID()
     {
         size_t underscorePos = instanceName.find('_');                                                        // 找到下划线的位置
         return (underscorePos != std::string::npos) ? std::stoi(instanceName.substr(underscorePos + 1)) : -1; // 提取并转换
     }
-
 };
 
 class Net

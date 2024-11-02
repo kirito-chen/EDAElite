@@ -74,6 +74,50 @@ bool Tile::addInstance(int instID, int offset, std::string modelType, const bool
   return true;
 }
 
+// 获取当前instance的seq占用bank的情况
+std::vector<int> Tile::getSeqInstanceBankNum()
+{
+  std::vector<int> seqBankNum;
+  bool zeroBankFlag = false;
+  bool oneBankFlag = false;
+
+  // 遍历实例映射，根据类型筛选出 SEQ 实例
+  for (const auto &entry : instanceMap)
+  {
+    const std::string &type = entry.first;
+    const slotArr &slots = entry.second;
+
+    if (type.substr(0, 3) == "SEQ") // 只处理 SEQ 类型的实例
+    {
+      // 遍历每个槽位
+      for (size_t i = 0; i < slots.size(); ++i)
+      {
+        const auto &optimizedInstances = slots[i]->getOptimizedInstances();
+
+        // 如果该槽位有实例且i属于8-15
+        if (!optimizedInstances.empty() && i > 7)
+        {
+          oneBankFlag = true;
+        }
+        // 如果该槽位有实例且i属于0-7
+        if (!optimizedInstances.empty() && i <= 7)
+        {
+          zeroBankFlag = true;
+        }
+      }
+    }
+  }
+  if (zeroBankFlag)
+  {
+    seqBankNum.push_back(0);
+  }
+  if (oneBankFlag)
+  {
+    seqBankNum.push_back(1);
+  }
+  return seqBankNum; // 返回所有 SEQ 实例在各个 Bank 的占用情况
+}
+
 std::vector<std::set<Instance *>> Tile::getFixedOptimizedLUTGroups() const
 {
   std::unordered_map<int, std::set<Instance *>> lutGroupMap; // 按照 lutSetID 分组
@@ -1315,6 +1359,7 @@ Instance::Instance()
   plbGroupID = -1;
   lutInitialed = false;
   lutSetID = -1;
+  seqGroupID = -1;
 }
 
 bool Instance::isPlaced()

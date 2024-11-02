@@ -598,6 +598,8 @@ void matchLUTPairs(std::map<int, Instance *> &glbInstMap)
     // printInstanceInformation();
     // initializePLBPlacementMap(plbGroups);
     initializeSEQPlacementMap(glbInstMap);
+    printInstanceInformation();
+    updateSEQLocations(seqPlacementMap);
     updateInstancesToTiles();
 }
 
@@ -668,10 +670,6 @@ void matchFixedLUTGroupsToPLB(std::map<int, std::set<Instance *>> &lutGroups, st
         // 从未匹配的LUT组中选择一个作为初始组
         int currentGroupID = *unmatchedLUTGroups.begin();
         Instance *currentFirstInstance = *lutGroups[currentGroupID].begin();
-        if (currentGroupID == 3)
-        {
-            int dummy = 0;
-        }
 
         if (!currentFirstInstance->isFixed())
         {
@@ -726,10 +724,7 @@ void matchFixedLUTGroupsToPLB(std::map<int, std::set<Instance *>> &lutGroups, st
                                 unmatchedLUTGroups.erase(groupID);
                             }
                         }
-                        else
-                        {
-                            int dummy = 0;
-                        }
+                        
                     }
                 }
             }
@@ -745,35 +740,7 @@ void matchFixedLUTGroupsToPLB(std::map<int, std::set<Instance *>> &lutGroups, st
         // 检查tilePtr的DRAM占用情况，占用0则要去除LUT的0-3编号，占用1则要去除LUT的4-7编号
         std::vector<int> dramInTile = tilePtr->getFixedOptimizedDRAMGroups();
         int dramNum = dramInTile.size();
-        // if (!dramInTile.empty())
-        // {
-        //     for (auto i:dramInTile)
-        //     {
-        //         if(i == 0)
-        //         {
-        //             for (int j = 0; j < 3; j++)
-        //             {
-        //                 availableSites.erase(j);
-        //             }
-        //         }
-        //         if(i == 1)
-        //         {
-        //             for (int j = 4; j < 7; j++)
-        //             {
-        //                 availableSites.erase(j);
-        //             }
-        //         }
-        //     }
-        // }
-        if (currentPLB.size() < MAX_LUT_CAPACITY - dramNum * 4)
-        {
-            int dummy = 0;
-        }
-        else
-        {
-            int dummy = 0;
-        }
-
+        
         // 继续添加其他LUT组到当前PLB，直到达到限制或没有匹配项
         while (currentPLB.size() < MAX_LUT_CAPACITY - dramNum * 4)
         {
@@ -828,10 +795,7 @@ void matchFixedLUTGroupsToPLB(std::map<int, std::set<Instance *>> &lutGroups, st
                         currentPLB.insert(lutGroups[bestMatchedGroupID]);
                         lut->setPLBGroupID(currentPLBID); // 设置plbGroupID
                     }
-                    else
-                    {
-                        int dummy = 0;
-                    }
+                    
                 }
             }
             else
@@ -874,10 +838,6 @@ void matchFixedLUTGroupsToPLB(std::map<int, std::set<Instance *>> &lutGroups, st
         newPLBGroup.insert(newPLBGroup.begin(), newPLBGroup.end()); // 复制组内所有实例
         for (Instance *lut : newPLBGroup)
         {
-            if (lut->isFixed())
-            {
-                int dummy = 0;
-            }
 
             lut->setPLBGroupID(newPLBID); // 设置新的PLB组ID
         }
@@ -1020,10 +980,7 @@ void matchLUTGroupsToPLB(std::map<int, std::set<Instance *>> &lutGroups, std::ma
                                     unmatchedLUTGroups.erase(groupID);
                                 }
                             }
-                            else
-                            {
-                                int dummy = 0;
-                            }
+                            
                         }
                     }
                 }
@@ -1197,11 +1154,6 @@ void updatePLBLocations(std::map<int, std::set<std::set<Instance *>>> &plbGroups
                 int siteIndex = *availableSites.begin();
                 for (Instance *lut : lutGroup)
                 {
-                    if (lut->getInstanceName() == "inst_5046" || lut->getInstanceName() == "inst_1740" || lut->getInstanceName() == "inst_1735")
-                    {
-                        int dummy = 0;
-                    }
-
                     if (lut->isFixed())
                     {
                         auto tempLocation = lut->getLocation();
@@ -1305,6 +1257,7 @@ void initializeSEQPlacementMap(const std::map<int, Instance *> &glbInstMap)
             if (bank.getSEQCount() < 8 && bank.addInstance(inst))
             {
                 placed = true;
+                inst->setSEQID(bank.getBankID());
                 break;
             }
         }
@@ -1323,6 +1276,7 @@ void initializeSEQPlacementMap(const std::map<int, Instance *> &glbInstMap)
             }
 
             newBank.addInstance(inst);
+            inst->setSEQID(newBank.getBankID());
             seqPlacementMap[newBank.getBankID()] = newBank;
         }
     }
@@ -1506,16 +1460,19 @@ void initializeSEQGroupLocations(std::unordered_map<int, SEQBankPlacement> &seqP
     }
     updateSEQLocations(seqPlacementMap);
 }
-
+// 将同一个SEQ组下的seq坐标改为第一个seq的坐标并且重新编号
 void updateSEQLocations(std::unordered_map<int, SEQBankPlacement> &seqBankMap)
 {
     for (auto &pair : seqBankMap)
     {
         SEQBankPlacement &seqBank = pair.second;
-
+        auto inst = *seqBank.getSEQInstances().begin();
+        auto newlocation = inst->getLocation();
         // 获取该SEQ Bank的当前坐标
-        auto [x, y] = seqBank.getLocation();
-
+        int x = std::get<0>(newlocation);
+        int y = std::get<1>(newlocation);
+        // auto [x, y] = seqBank.getLocation();
+        seqBank.setLocation(x, y);
         // 获取该SEQ Bank内的所有SEQ实例
         const auto &seqInstances = seqBank.getSEQInstances();
 
@@ -1527,6 +1484,7 @@ void updateSEQLocations(std::unordered_map<int, SEQBankPlacement> &seqBankMap)
             seq->setLocation(std::make_tuple(x, y, z));
             z++; // 更新z编号
         }
+        int dummy = 0;
     }
 }
 
@@ -1581,11 +1539,6 @@ bool updateInstancesToTiles()
                         int instID = instance->getInstID();
                         if (tilePtr->addInstance(instID, std::get<2>(sitelocation), instance->getModelName(), false))
                         {
-                            if (instance->getInstanceName() == "inst_3096")
-                            {
-                                int dummy = 0;
-                            }
-
                             instance->setLUTInitial(true);
                         }
                         else
@@ -1599,10 +1552,7 @@ bool updateInstancesToTiles()
                 }
             }
         }
-        else
-        {
-            int dummy = 0;
-        }
+        
     }
     legalCheck();
     int totalLUTCount = 0;
@@ -1790,8 +1740,120 @@ bool updateInstancesToTiles()
         }
     }
     std::cout << "未能安置的PLB组的数目 : " << totalLUTCount << std::endl;
-
     //-------------------------------------------------------------------------------
+
+    // 将seq放置在tile上，并进行合法化处理
+    for (const auto &[bankID, bank] : seqPlacementMap)
+    {
+        bool isSeqPlaceFinished = false;
+        // 获取 bank 的位置
+        auto [x, y] = bank.getLocation(); // 假设 getLocation() 返回 (x, y)
+        while (!isSeqPlaceFinished)
+        {
+            // 获取相应的 Tile
+            Tile *tilePtr = chip.getTile(x, y);
+            if (tilePtr == nullptr)
+            {
+                std::cout << "Error: Tile at (" << x << ", " << y << ") is invalid." << std::endl;
+                continue; // 跳过无效的 Tile
+            }
+
+            // 检查 Tile 的类型是否为 PLB
+            if (!tilePtr->getTileTypes().count("PLB"))
+            {
+                std::cout << "Error: Tile at (" << x << ", " << y << ") is not a PLB." << std::endl;
+                
+                auto neighbors = getNeighborTile(x, y); // 找下一个tile位置
+                x = std::get<0>(neighbors);
+                y = std::get<1>(neighbors);
+                continue; // 跳过非 PLB 类型的 Tile
+            }
+
+            std::vector<int> seqBankNum = tilePtr->getSeqInstanceBankNum();
+
+            // 根据seqBankNum来判断能不能放置新的Seq组
+            if (seqBankNum.size() == 0)
+            {
+                // 遍历 bank 中的 SEQ 实例并进行放置
+                for (Instance *seqInstance : bank.getSEQInstances()) // 假设 getInstances() 返回 SEQ 实例的集合
+                {
+                    auto newLocation = seqInstance->getLocation();
+                    int siteIndex = std::get<2>(newLocation); // 获取坐标中的 siteIndex
+
+                    // 尝试将 SEQ 实例放置到 Tile 中
+                    int instID = seqInstance->getInstID();
+
+                    if (!tilePtr->addInstance(instID, siteIndex, seqInstance->getModelName(), false))
+                    {
+                        std::cout << "Error: Failed to add SEQ instance " << seqInstance->getInstanceName()
+                                  << " to tile at (" << x << ", " << y << ")." << std::endl;
+                        return false; // 返回错误
+                    }
+
+                    std::tuple<int, int, int> seqLocation = {x, y, siteIndex};
+                    seqInstance->setLocation(seqLocation);
+                    seqInstance->setLUTInitial(true); // 标记为已放置
+                }
+                isSeqPlaceFinished = true;
+            }
+            if (seqBankNum.size() == 1)
+            {
+                if (seqBankNum[0] == 1)
+                {
+                    // 遍历 bank 中的 SEQ 实例并进行放置
+                    for (Instance *seqInstance : bank.getSEQInstances()) // 假设 getInstances() 返回 SEQ 实例的集合
+                    {
+                        auto newLocation = seqInstance->getLocation();
+                        int siteIndex = std::get<2>(newLocation); // 获取坐标中的 siteIndex
+
+                        // 尝试将 SEQ 实例放置到 Tile 中
+                        int instID = seqInstance->getInstID();
+
+                        if (!tilePtr->addInstance(instID, siteIndex, seqInstance->getModelName(), false))
+                        {
+                            std::cout << "Error: Failed to add SEQ instance " << seqInstance->getInstanceName()
+                                      << " to tile at (" << x << ", " << y << ")." << std::endl;
+                            return false; // 返回错误
+                        }
+
+                        std::tuple<int, int, int> seqLocation = {x, y, siteIndex};
+                        seqInstance->setLocation(seqLocation);
+                        seqInstance->setLUTInitial(true); // 标记为已放置
+                    }
+                    isSeqPlaceFinished = true;
+                }
+                if (seqBankNum[0] == 0)
+                {
+                    // 遍历 bank 中的 SEQ 实例并进行放置
+                    for (Instance *seqInstance : bank.getSEQInstances()) // 假设 getInstances() 返回 SEQ 实例的集合
+                    {
+                        auto newLocation = seqInstance->getLocation();
+                        int siteIndex = std::get<2>(newLocation); // 获取坐标中的 siteIndex
+                        siteIndex += 8;
+                        // 尝试将 SEQ 实例放置到 Tile 中
+                        int instID = seqInstance->getInstID();
+
+                        if (!tilePtr->addInstance(instID, siteIndex, seqInstance->getModelName(), false))
+                        {
+                            std::cout << "Error: Failed to add SEQ instance " << seqInstance->getInstanceName()
+                                      << " to tile at (" << x << ", " << y << ")." << std::endl;
+                            return false; // 返回错误
+                        }
+                        std::tuple<int, int, int> seqLocation = {x, y, siteIndex};
+                        seqInstance->setLocation(seqLocation);
+                        seqInstance->setLUTInitial(true); // 标记为已放置
+                    }
+                    isSeqPlaceFinished = true;
+                }
+            }
+            if (seqBankNum.size() == 2)
+            {
+                auto neighbors = getNeighborTile(x, y); // 找下一个tile位置
+                x = std::get<0>(neighbors);
+                y = std::get<1>(neighbors);
+            }
+        }
+    }
 
     printPLBInformation();
 
@@ -1838,6 +1900,7 @@ void printPLBInformation()
 void printInstanceInformation()
 {
     int totalFixedInstance = 0;
+    int totalSeqMatchedInstance = 0;
     // 遍历 glbInstMap 组
     for (auto &inst : glbInstMap)
     {
@@ -1846,9 +1909,15 @@ void printInstanceInformation()
         {
             totalFixedInstance++;
         }
+        if (instance->getSEQID() != -1)
+        {
+            totalSeqMatchedInstance++;
+        }
     }
     std::cout << lineBreaker << std::endl;
     std::cout << "固定的Instance数目 : " << totalFixedInstance << std::endl;
+    std::cout << "匹配完成的Seq数目 : " << totalSeqMatchedInstance << std::endl;
+    std::cout << "Seq组的数目 : " << seqPlacementMap.size() << std::endl;
     std::cout << lineBreaker << std::endl;
 }
 

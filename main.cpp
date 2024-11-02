@@ -289,26 +289,6 @@ int main(int argc, char *argv[])
     std::cout << "plbPlacementMap size: " << plbPlacementMap.size() << std::endl;
     std::cout << "seqPlacementMap size: " << seqPlacementMap.size() << std::endl;
 
-    // initializePLBGroupLocations(plbPlacementMap);
-    // initializeSEQGroupLocations(seqPlacementMap);
-    // global_placement_sa(false);
-    // 检测数据
-    // for (auto &inst : glbInstMap)
-    // {
-    //     if (inst.first == 43907)
-    //     {
-    //         std::cout << lineBreaker << std::endl;
-    //     }
-    // }
-
-    for (auto &glbInst : glbInstMap)
-    {
-        if (glbInst.first == 1416)
-        {
-            int dummy = 0;
-        }
-    }
-
     //-------------------测试---------------
     // testHPWL();
     // reportWirelength();
@@ -324,35 +304,6 @@ int main(int argc, char *argv[])
     result = legalCheck();
     generateOutputFile("test.txt");
 
-    // init fixed tile
-    for (int i = 0; i < chip.getNumCol(); i++)
-    {
-        for (int j = 0; j < chip.getNumRow(); j++)
-        {
-            if (i == 31 && j == 133)
-            {
-                std::cout << " ";
-            }
-            if (i == 14 && j == 111)
-            {
-                std::cout << " ";
-            }
-            if (i == 99 && j == 152)
-            {
-                std::cout << " ";
-            }
-            Tile *tile = chip.getTile(i, j);
-            int dummy = 0;
-        }
-    }
-    // TEST FOR INSTANCE
-    for (auto &inst : glbInstMap)
-    {
-        if(inst.second->getInstanceName() == "inst_492" || inst.second->getInstanceName() == "inst_499"|| inst.second->getInstanceName() == "inst_500"|| inst.second->getInstanceName() == "inst_511"|| inst.second->getInstanceName() == "inst_512")
-        {
-            int dummy = 0;
-        }
-    }
     // free memory before exit
     for (auto &lib : glbLibMap)
     {
