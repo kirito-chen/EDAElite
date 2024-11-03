@@ -73,13 +73,15 @@ int main(int argc, char *argv[])
     }
     std::cout << "  Successfully read design files." << std::endl;
 
+
+
     //基于baseline修改
-    bool isBaseline = true;
+    bool isBaseline = false;
     readOutputNetlist(nodesFile);
 
     matchLUTPairs(glbInstMap, true, false);
-    legalCheck();
-    reportWirelength();
+    // legalCheck();
+    // reportWirelength();
     //设置isPLB数组
     setIsPLB();
     // 模拟退火

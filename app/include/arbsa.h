@@ -9,3 +9,8 @@
 int arbsa(bool isBaseline); 
 std::tuple<int, int, int> findSuitableLocForLutSet(bool isBaseline, int x, int y, int rangeDesired, Instance *inst);
 bool isValidForLutorSeqSet(bool isBaseline, int x, int y, int &z, Instance *inst);
+
+int changeTileForSet(bool isBaseline, std::tuple<int, int, int> originLoc, std::tuple<int, int, int> loc, Instance *inst);
+
+
+

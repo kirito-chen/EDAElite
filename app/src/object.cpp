@@ -1413,6 +1413,20 @@ void Instance::createInpins()
   }
 }
 
+int Instance::getUsedNumInpins() const
+{
+  int totalUsedInputPinNum = 0;
+  for (size_t i = 0; i < inpins.size(); i++)
+  {
+    if (inpins[i]->getNetID() != -1)
+    {
+      totalUsedInputPinNum++;
+    }    
+  }
+  return totalUsedInputPinNum;
+  
+}
+
 void Instance::createOutpins()
 {
   if (cellLib == nullptr)

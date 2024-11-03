@@ -347,6 +347,7 @@ public:
 
     void createInpins();
     int getNumInpins() const { return inpins.size(); }
+    int getUsedNumInpins() const;
     std::vector<Pin *> getInpins() const { return inpins; }
     Pin *getInpin(int idx) const { return inpins[idx]; }
     // void connectInpin(int netID, int idx) { inpins[idx].setNetID(netID); }

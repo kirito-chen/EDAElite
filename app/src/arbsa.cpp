@@ -538,9 +538,6 @@ bool isValidForLutorSeqSet(bool isBaseline, int x, int y, int &z, Instance *inst
             }
             if (instances.size() == 0) // 判断是否有一整个LUT6site可供放置
             {
-                // 大于1个lut，不可放入了
-                instances.push_back(instId);                  // 添加当前instId
-                instances.push_back(inst->getMatchedLUTID()); // 添加当前instId
                 z = idx;
                 return true;
             }
@@ -792,6 +789,86 @@ int changeTile(bool isBaseline, std::tuple<int, int, int> originLoc, std::tuple<
     int instId = std::stoi(inst->getInstanceName().substr(5)); // inst_xxx 从第5个字符开始截取，转换为整数
     // 删除旧的tile插槽中的inst
     slotArr *slotArrCur = tileCur->getInstanceByType(inst->getModelName().substr(0, 3)); // LUT or SEQ
+
+    int lutMatchedLutID = inst->getMatchedLUTID();
+
+    Slot *slot = slotArrCur->at(zCur);
+
+    if (lutMatchedLutID != -1)
+    {
+        if (isBaseline)
+        {
+            std::list<int> &instances = slot->getBaselineInstances();
+            for (int instIdTmp : instances)
+            {
+                if (instId == instIdTmp || lutMatchedLutID == instIdTmp)
+                {
+                    instances.remove(instIdTmp);
+                    break;
+                }
+            }
+        }
+        else
+        {
+            std::list<int> &instances = slot->getOptimizedInstancesRef();
+            for (int instIdTmp : instances)
+            {
+                if (instId == instIdTmp || lutMatchedLutID == instIdTmp)
+                {
+                    instances.remove(instIdTmp);
+                    break;
+                }
+            }
+        }
+
+        // 在新的插槽中插入
+        tileGoal->addInstance(instId, zGoal, inst->getModelName(), isBaseline);
+        tileGoal->addInstance(lutMatchedLutID, zGoal, glbInstMap[lutMatchedLutID]->getModelName(), isBaseline);
+    }
+    else
+    {
+        if (isBaseline)
+        {
+            std::list<int> &instances = slot->getBaselineInstances();
+            for (int instIdTmp : instances)
+            {
+                if (instId == instIdTmp)
+                {
+                    instances.remove(instIdTmp);
+                    break;
+                }
+            }
+        }
+        else
+        {
+            std::list<int> &instances = slot->getOptimizedInstancesRef();
+            for (int instIdTmp : instances)
+            {
+                if (instId == instIdTmp)
+                {
+                    instances.remove(instIdTmp);
+                    break;
+                }
+            }
+        }
+
+        // 在新的插槽中插入
+        tileGoal->addInstance(instId, zGoal, inst->getModelName(), isBaseline);
+    }
+
+    return 0;
+}
+
+int changeTileForSet(bool isBaseline, std::tuple<int, int, int> originLoc, std::tuple<int, int, int> loc, Instance *inst)
+{
+    int xCur, yCur, zCur, xGoal, yGoal, zGoal;
+    std::tie(xCur, yCur, zCur) = originLoc;
+    std::tie(xGoal, yGoal, zGoal) = loc;
+    Tile *tileCur = chip.getTile(xCur, yCur);
+    Tile *tileGoal = chip.getTile(xGoal, yGoal);
+    int instId = std::stoi(inst->getInstanceName().substr(5)); // inst_xxx 从第5个字符开始截取，转换为整数
+    // 删除旧的tile插槽中的inst
+    slotArr *slotArrCur = tileCur->getInstanceByType(inst->getModelName().substr(0, 3)); // LUT or SEQ
     Slot *slot = slotArrCur->at(zCur);
     if (isBaseline)
     {
@@ -820,6 +897,8 @@ int changeTile(bool isBaseline, std::tuple<int, int, int> originLoc, std::tuple<
 
     // 在新的插槽中插入
     tileGoal->addInstance(instId, zGoal, inst->getModelName(), isBaseline);
+    int lutMatchedLutID = inst->getMatchedLUTID();
+    tileGoal->addInstance(lutMatchedLutID, zGoal, glbInstMap[lutMatchedLutID]->getModelName(), isBaseline);
 
     return 0;
 }
@@ -879,7 +958,8 @@ int arbsa(bool isBaseline)
         std::tie(centerX, centerY) = getNetCenter(isBaseline, net);
         int x, y, z;
         // 如果inst有匹配组
-        int instMatchedLUTID = -1; //inst->getMatchedLUTID();
+        int instMatchedLUTID = inst->getMatchedLUTID();
+        // int instMatchedLUTID = -1;
         // printPLBInformation();      //测试
         if (instMatchedLUTID != -1)
         {
@@ -990,7 +1070,7 @@ int arbsa(bool isBaseline)
                 }
                 std::cout << "[INFO] T:" << std::scientific << std::setprecision(3) << T << " iter:" << std::setw(4) << Iter << " alpha:" << std::fixed << std::setprecision(2) << alpha << " cost:" << std::setw(7) << cost << std::endl;
             }
-            // std::cout<<"[INFO] T:"<< std::scientific << std::setprecision(3) <<T <<" iter:"<<std::setw(4)<<Iter<<" alpha:"<<std::fixed<<std::setprecision(2)<<alpha<<" cost:"<<std::setw(7)<<cost<<std::endl;
+            std::cout << "[INFO] T:" << std::scientific << std::setprecision(3) << T << " iter:" << std::setw(4) << Iter << " alpha:" << std::fixed << std::setprecision(2) << alpha << " cost:" << std::setw(7) << cost << std::endl;
             if (Iter == 41)
             {
                 int a = 0;
@@ -1019,6 +1099,7 @@ int arbsa(bool isBaseline)
             int x, y, z;
             // 如果inst有匹配组
             int instMatchedLUTID = inst->getMatchedLUTID();
+            // int instMatchedLUTID = -1;
             if (instMatchedLUTID != -1)
             {
                 std::tie(x, y, z) = findSuitableLocForLutSet(isBaseline, centerX, centerY, rangeDesiredMap[netId], inst);
@@ -1037,7 +1118,7 @@ int arbsa(bool isBaseline)
             std::tuple<int, int, int> loc = std::make_tuple(x, y, z);
             std::tuple<int, int, int> originLoc;
 
-            if (false)
+            if (instMatchedLUTID != -1)
             {
                 if (isBaseline)
                 {
@@ -1058,7 +1139,7 @@ int arbsa(bool isBaseline)
                 std::cout << "DEBUG-deta:" << deta << std::endl;
 #endif
                 // if deta < 0 更新这个操作到布局中，更新fitness列表
-                if (deta < 0)
+                if (deta < 400)
                 {
                     changeTile(isBaseline, originLoc, loc, inst);
                     calculrangeMap(isBaseline, rangeActualMap);
