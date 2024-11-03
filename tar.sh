@@ -1,1 +1,1 @@
-tar -czvf EDAElite.tar.gz app/ checker/ main.cpp config.json CMakeLists.txt compile.sh run.sh
+tar -czvf EDAElite`date +%m-%d`.tar.gz app/ checker/ main.cpp config.json CMakeLists.txt compile.sh run.sh

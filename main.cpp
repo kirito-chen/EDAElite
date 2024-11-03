@@ -45,6 +45,11 @@ int main(int argc, char *argv[])
     std::string libFile = getValue(jsonContent, "libFile");
     std::string sclFile = getValue(jsonContent, "sclFile");
     std::string clkFile = getValue(jsonContent, "clkFile");
+
+    // //竞赛提交版本
+    // std::string libFile = "/home/public/Arch/fpga.lib";
+    // std::string sclFile = "/home/public/Arch/fpga.scl";
+    // std::string clkFile = "/home/public/Arch/fpga.clk";
     if (readAndCreateLib(libFile) == false)
     {
         std::cout << "Failed to create library" << std::endl;

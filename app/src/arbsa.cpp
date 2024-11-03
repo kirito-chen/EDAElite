@@ -574,6 +574,7 @@ int arbsa(bool isBaseline){
     float T = 2;
     float threashhold = 0; //1e-5
     float alpha = 0.8; //0.8-0.99
+    const int timeLimit = 1180; //1180  3580
     // 计算初始cost
     int cost = 0, costNew = 0;
     cost = getWirelength(isBaseline);
@@ -581,7 +582,7 @@ int arbsa(bool isBaseline){
     //自适应参数
     int counterNet = 0;
     const int counterNetLimit = 800;
-    const int seed = 999;
+    const int seed = 999;  // 999 888
     set_random_seed(seed);
 
     std::vector<int> sigmaVecInit;
@@ -665,7 +666,7 @@ int arbsa(bool isBaseline){
                 auto tmp = std::chrono::high_resolution_clock::now();
                 // 计算运行时间
                 std::chrono::duration<double> durationtmp = tmp - start;
-                if(durationtmp.count() >= 1180){
+                if(durationtmp.count() >= timeLimit){  //1180
                     timeup = true;
                     break;
                 }
