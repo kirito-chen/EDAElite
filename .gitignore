@@ -3,5 +3,10 @@ build
 .vscode*
 checker
 log
+call*
+perf*
+FlameGraph
+getFlameGraph.sh
+*tar.gz
 Result
 WorkSpace/public/Test

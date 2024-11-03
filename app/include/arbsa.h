@@ -7,6 +7,8 @@
 #include "method.h"
 
 int arbsa(bool isBaseline); 
+
+int arbsaMtx(bool isBaseline); //多线程版本
 std::tuple<int, int, int> findSuitableLocForLutSet(bool isBaseline, int x, int y, int rangeDesired, Instance *inst);
 bool isValidForLutorSeqSet(bool isBaseline, int x, int y, int &z, Instance *inst);
 

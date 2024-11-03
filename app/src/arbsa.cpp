@@ -8,6 +8,7 @@
 #include <random>
 // 计时
 #include <chrono>
+
 // #define DEBUG
 
 // 全局随机数生成器
@@ -57,12 +58,52 @@ double calculateStandardDeviation(const std::vector<int> &data)
     return std::sqrt(variance / data.size());
 }
 
-// 计算rangeActulMap
-int calculrangeMap(bool isBaseline, std::map<int, int> &rangeActualMap)
-{
-    for (auto it : glbNetMap)
-    {
-        Net *net = it.second;
+//计算rangeActulMap
+int calculrangeMap(bool isBaseline, std::map<int, int>& rangeActualMap){
+    for(auto iter : glbNetMap){
+        Net *net = iter.second;
+        // 访问net input 引脚
+        Instance* instIn = net->getInpin()->getInstanceOwner();
+        int x, y, z;
+        if(isBaseline){
+            std::tie(x, y, z) = instIn->getBaseLocation();
+        }
+        else{
+            std::tie(x, y, z) = instIn->getLocation();
+        }
+        int maxX, minX, maxY, minY;
+        maxX = minX = x;
+        maxY = minY = y;
+        // 访问net output 引脚
+        std::list<Pin*> outputPins = net->getOutputPins();
+        for(Pin *pin : outputPins){
+            Instance* instTmp = pin->getInstanceOwner();
+            if(isBaseline){
+                std::tie(x, y, z) = instTmp->getBaseLocation();
+            }
+            else{
+                std::tie(x, y, z) = instTmp->getLocation();
+            }
+            if(maxX < x) maxX = x;
+            if(minX > x) minX = x;
+            if(maxY < y) maxY = y;
+            if(minY > y) minY = y;
+        }
+        int netDesired = std::ceil((maxX-minX+maxY-minY)/2);
+        // int netDesired = std::ceil((maxX-minX+maxY-minY));
+        rangeActualMap[net->getId()] = netDesired;
+    }
+    return 0;
+}
+
+//优化，循环体中只计算相关的
+int calculRelatedRangeMap(bool isBaseline, std::map<int, int>& rangeActualMap, const std::set<int>& instRelatedNetId){
+    for(int i : instRelatedNetId){
+        if(glbNetMap.count(i) <= 0){
+            std::cout<<"calculRelatedRangeMap can not find this netId:"<<i<<std::endl;
+            continue;
+        }
+        Net *net = glbNetMap[i];
         // 访问net input 引脚
         Instance *instIn = net->getInpin()->getInstanceOwner();
         int x, y, z;
@@ -99,26 +140,24 @@ int calculrangeMap(bool isBaseline, std::map<int, int> &rangeActualMap)
             if (minY > y)
                 minY = y;
         }
-        int netDesired = std::ceil((maxX - minX + maxY - minY) / 2);
+        int netDesired = std::ceil((maxX-minX+maxY-minY)/2);
+        // int netDesired = std::ceil((maxX-minX+maxY-minY));
         rangeActualMap[net->getId()] = netDesired;
     }
     return 0;
 }
 
-int calculFitness(std::vector<std::pair<int, float>> &fitnessVec, std::map<int, int> &rangeDesiredMap, std::map<int, int> &rangeActualMap)
-{
+//计算Fitness
+int calculFitness(std::vector<std::pair<int,float>>& fitnessVec, std::map<int, int>& rangeDesiredMap, std::map<int, int>& rangeActualMap){ 
     // 计算fitness
     int n = fitnessVec.size();
-    for (int i = 0; i < n; i++)
-    {
-        int netId;
+    for(int i = 0; i < n; i++){
+        int netId = fitnessVec[i].first; 
         float fitness;
-        std::tie(netId, fitness) = fitnessVec[i];
         int rangeDesired = rangeDesiredMap[netId];
         int rangeActual = rangeActualMap[netId];
-        if (rangeDesired == 0 && rangeActual == 0)
-        {
-            fitness = 1; // 都为0则不考虑移动了，认为为最完美的net
+        if(rangeDesired == 0 && rangeActual == 0){
+            fitness = 1; //都为0则不考虑移动了，认为为最完美的net
         }
         else if (rangeDesired >= rangeActual)
         {
@@ -129,6 +168,82 @@ int calculFitness(std::vector<std::pair<int, float>> &fitnessVec, std::map<int, 
             fitness = rangeDesired / rangeActual;
         }
         fitnessVec[i] = std::make_pair(netId, fitness);
+    }
+    return 0;
+}
+
+//优化 只计算相关的fitness
+int calculRelatedFitness(std::vector<std::pair<int,float>>& fitnessVec, std::map<int, int>& rangeDesiredMap, std::map<int, int>& rangeActualMap, const std::set<int>& instRelatedNetId){ 
+    // 计算fitness
+    int n = fitnessVec.size();
+    for(auto netId : instRelatedNetId){
+        if(glbNetMap.count(netId) <= 0){
+            std::cout<<"calculRelatedFitness can not find this netId:"<<netId<<std::endl;
+            continue;
+        }
+        int index = -1; 
+        //找到匹配netId的下标
+        for (int i = 0; i < fitnessVec.size(); ++i) {
+            if (fitnessVec[i].first == netId) {
+                index = i;
+                break;
+            }
+        }
+        if(index == -1){
+            std::cout<<"can not find this netId: "<<netId <<", something may be wrong"<<std::endl;
+            exit(1);
+        }
+        int rangeDesired = rangeDesiredMap[netId];
+        int rangeActual = rangeActualMap[netId];
+        float fitness;
+        if(rangeDesired == 0 && rangeActual == 0){
+            fitness = 1; //都为0则不考虑移动了，认为为最完美的net
+        }
+        else if(rangeDesired >= rangeActual){
+            fitness = rangeActual / rangeDesired;
+        }
+        else{
+            fitness = rangeDesired / rangeActual;
+        }
+        fitnessVec[index] = std::make_pair(netId, fitness);
+    }
+    return 0;
+}
+
+//优化 只计算相关的fitness
+int calculRelatedFitness(std::vector<std::pair<int,float>>& fitnessVec, std::map<int, int>& rangeDesiredMap, std::map<int, int>& rangeActualMap, const std::set<int>& instRelatedNetId){ 
+    // 计算fitness
+    int n = fitnessVec.size();
+    for(auto netId : instRelatedNetId){
+        if(glbNetMap.count(netId) <= 0){
+            std::cout<<"calculRelatedFitness can not find this netId:"<<netId<<std::endl;
+            continue;
+        }
+        int index = -1; 
+        //找到匹配netId的下标
+        for (int i = 0; i < fitnessVec.size(); ++i) {
+            if (fitnessVec[i].first == netId) {
+                index = i;
+                break;
+            }
+        }
+        if(index == -1){
+            std::cout<<"can not find this netId: "<<netId <<", something may be wrong"<<std::endl;
+            exit(1);
+        }
+        int rangeDesired = rangeDesiredMap[netId];
+        int rangeActual = rangeActualMap[netId];
+        float fitness;
+        if(rangeDesired == 0 && rangeActual == 0){
+            fitness = 1; //都为0则不考虑移动了，认为为最完美的net
+        }
+        else if(rangeDesired >= rangeActual){
+            fitness = rangeActual / rangeDesired;
+        }
+        else{
+            fitness = rangeDesired / rangeActual;
+        }
+        fitnessVec[index] = std::make_pair(netId, fitness);
     }
     return 0;
 }
@@ -147,7 +262,9 @@ int selectNetId(std::vector<std::pair<int, float>> &fitnessVec)
     int n = fitnessVec.size();
     int a = generate_random_int(0, n - 1); // 范围在 0 到 n - 1
     int b = generate_random_int(0, n - 1);
-    return std::min(a, b);
+    int index = std::min(a, b);
+    int netId = fitnessVec[index].first;
+    return netId;
 }
 
 Instance *selectInst(Net *net)
@@ -778,9 +895,8 @@ std::tuple<int, int, int> findSuitableLocForLutSet(bool isBaseline, int x, int y
     return {xx, yy, zz};
 }
 
-//
-int changeTile(bool isBaseline, std::tuple<int, int, int> originLoc, std::tuple<int, int, int> loc, Instance *inst)
-{
+//修改slot队列
+int changeTile(bool isBaseline, std::tuple<int, int, int> originLoc, std::tuple<int, int, int> loc, Instance* inst){
     int xCur, yCur, zCur, xGoal, yGoal, zGoal;
     std::tie(xCur, yCur, zCur) = originLoc;
     std::tie(xGoal, yGoal, zGoal) = loc;
@@ -909,13 +1025,12 @@ int arbsa(bool isBaseline)
     auto start = std::chrono::high_resolution_clock::now();
 
     // 初始布局
-
-    // 构造 fitness 优先级列表 初始化 rangeDesired
-    std::vector<std::pair<int, float>> fitnessVec; // 第一个是netId，第二个是适应度fitness, 适应度越小表明越需要移动。后续会按照fitness升序排列
-    std::map<int, int> rangeDesiredMap;            // 第一个是netId，第二个是外框矩形的平均跨度，即半周线长的一半
-    calculrangeMap(isBaseline, rangeDesiredMap);
-    for (auto it : glbNetMap)
-    {
+    
+    // 构造 fitness 优先级列表 初始化 rangeDesired  
+    std::vector<std::pair<int,float>> fitnessVec; // 第一个是netId，第二个是适应度fitness, 适应度越小表明越需要移动。后续会按照fitness升序排列
+    std::map<int, int> rangeDesiredMap; // 第一个是netId，第二个是外框矩形的平均跨度，即半周线长的一半
+    calculrangeMap(isBaseline, rangeDesiredMap);  
+    for(auto it : glbNetMap){
         Net *net = it.second;
         // 构造fitnessVec
         fitnessVec.emplace_back(std::make_pair(net->getId(), 0));
@@ -928,17 +1043,19 @@ int arbsa(bool isBaseline)
 
     // 初始化迭代次数Iter、初始化温度T
     int Iter = 0;
-    // int InnerIter = int( pow(glbInstMap.size(),4/3) );
-    int InnerIter = 2000; // int( glbInstMap.size()*0.2 );
-    // int InnerIter = 100;
-    float T = 2, threashhold = 0, alpha = 0.8; // 0.8-0.99
+    int InnerIter = 2000; //int( glbInstMap.size()*0.2 );  int( pow(glbInstMap.size(),4/3) ); 
+    float T = 2;
+    float threashhold = 0; //1e-5
+    float alpha = 0.8; //0.8-0.99
+    const int timeLimit = 1180; //1180  3580
     // 计算初始cost
     int cost = 0, costNew = 0;
     cost = getWirelength(isBaseline);
-    // 自适应参数
+    // cost = getHPWL(isBaseline);
+    //自适应参数
     int counterNet = 0;
-    const int counterNetLimit = 100;
-    const int seed = 999;
+    const int counterNetLimit = 800;
+    const int seed = 999;  // 999 888
     set_random_seed(seed);
 
     std::vector<int> sigmaVecInit;
@@ -975,70 +1092,48 @@ int arbsa(bool isBaseline)
             // 没找到合适位置
             continue;
         }
+        //找到这个inst附近的net
+        std::set<int> instRelatedNetId;
+        //访问inputpin
+        for(auto& pin: inst->getInpins()){
+            int netId = pin->getNetID();
+            //-1表示未连接
+            if(netId != -1) instRelatedNetId.insert(pin->getNetID());
+        }
+        //访问outputpin
+        for(auto& pin: inst->getOutpins()){
+            int netId = pin->getNetID();
+            //-1表示未连接
+            if(netId != -1) instRelatedNetId.insert(pin->getNetID());
+        }
+        
         // 计算移动后的newCost
         std::tuple<int, int, int> loc = std::make_tuple(x, y, z);
         std::tuple<int, int, int> originLoc;
-        if (instMatchedLUTID != -1)
-        {
-            if (isBaseline)
-            {
-                originLoc = inst->getBaseLocation();
-                glbInstMap[instMatchedLUTID]->setBaseLocation(loc);
-                inst->setBaseLocation(loc);
-            }
-            else
-            {
-                originLoc = inst->getLocation();
-                glbInstMap[instMatchedLUTID]->setLocation(loc);
-                inst->setLocation(loc);
-            }
-            costNew = getWirelength(isBaseline);
-            if (costNew < cost)
-            {
-                sigmaVecInit.emplace_back(costNew);
-            }
-            // 复原
-            if (isBaseline)
-            {
-                inst->setBaseLocation(originLoc);
-                glbInstMap[instMatchedLUTID]->setBaseLocation(loc);
-            }
-            else
-            {
-                inst->setLocation(originLoc);
-                glbInstMap[instMatchedLUTID]->setLocation(loc);
-            }
+        //保存更新前的部分net
+        int beforeNetWL = getRelatedWirelength(isBaseline, instRelatedNetId);
+        if(isBaseline){
+            originLoc = inst->getBaseLocation();
+            inst->setBaseLocation(loc);
         }
-        else
-        {
-            if (isBaseline)
-            {
-                originLoc = inst->getBaseLocation();
-                inst->setBaseLocation(loc);
-            }
-            else
-            {
-                originLoc = inst->getLocation();
-                inst->setLocation(loc);
-            }
-            costNew = getWirelength(isBaseline);
-            if (costNew < cost)
-            {
-                sigmaVecInit.emplace_back(costNew);
-            }
-            // 复原
-            if (isBaseline)
-            {
-                inst->setBaseLocation(originLoc);
-            }
-            else
-            {
-                inst->setLocation(originLoc);
-            }
+        else{
+            originLoc = inst->getLocation();
+            inst->setLocation(loc);
+        }
+        int afterNetWL = getRelatedWirelength(isBaseline, instRelatedNetId);
+        int costNew = cost - beforeNetWL + afterNetWL;
+        if(costNew < cost){
+            sigmaVecInit.emplace_back(costNew);
+        }
+        //复原
+        if(isBaseline){
+            inst->setBaseLocation(originLoc);
+        } else{
+            inst->setLocation(originLoc);
         }
     }
 
-    // 计算标准差
+    //计算标准差
     double standardDeviation = calculateStandardDeviation(sigmaVecInit);
     std::cout << "------------------------------------------------\n";
     std::cout << "[INFO] Standard Deviation: " << standardDeviation << std::endl;
@@ -1063,8 +1158,7 @@ int arbsa(bool isBaseline)
                 auto tmp = std::chrono::high_resolution_clock::now();
                 // 计算运行时间
                 std::chrono::duration<double> durationtmp = tmp - start;
-                if (durationtmp.count() >= 1180)
-                {
+                if(durationtmp.count() >= timeLimit){  //1180
                     timeup = true;
                     break;
                 }
@@ -1113,149 +1207,90 @@ int arbsa(bool isBaseline)
                 // 没找到合适位置
                 continue;
             }
-
+            //找到这个inst附近的net
+            std::set<int> instRelatedNetId;
+            //访问inputpin
+            for(auto& pin: inst->getInpins()){
+                int netId = pin->getNetID();
+                //-1表示未连接
+                if(netId != -1) instRelatedNetId.insert(pin->getNetID());
+            }
+            //访问outputpin
+            for(auto& pin: inst->getOutpins()){
+                int netId = pin->getNetID();
+                //-1表示未连接
+                if(netId != -1) instRelatedNetId.insert(pin->getNetID());
+            }
+            
             // 计算移动后的newCost
             std::tuple<int, int, int> loc = std::make_tuple(x, y, z);
             std::tuple<int, int, int> originLoc;
-
-            if (instMatchedLUTID != -1)
-            {
-                if (isBaseline)
-                {
-                    originLoc = inst->getBaseLocation();
-                    glbInstMap[instMatchedLUTID]->setBaseLocation(loc);
-                    inst->setBaseLocation(loc);
-                }
-                else
-                {
-                    originLoc = inst->getLocation();
-                    glbInstMap[instMatchedLUTID]->setLocation(loc);
-                    inst->setLocation(loc);
-                }
-                costNew = getWirelength(isBaseline);
-                // deta = new_cost - cost
-                int deta = costNew - cost;
-#ifdef DEBUG
-                std::cout << "DEBUG-deta:" << deta << std::endl;
-#endif
-                // if deta < 0 更新这个操作到布局中，更新fitness列表
-                if (deta < 400)
-                {
+            //保存更新前的部分net
+            int beforeNetWL = getRelatedWirelength(isBaseline, instRelatedNetId);
+            if(isBaseline){
+                originLoc = inst->getBaseLocation();
+                inst->setBaseLocation(loc);
+            }
+            else{
+                originLoc = inst->getLocation();
+                inst->setLocation(loc);
+            }
+            int afterNetWL = getRelatedWirelength(isBaseline, instRelatedNetId);
+            int costNew = cost - beforeNetWL + afterNetWL;
+            // costNew = getHPWL(isBaseline);
+            // deta = new_cost - cost
+            int deta = costNew - cost;
+            #ifdef DEBUG
+                std::cout<<"DEBUG-deta:"<<deta<<std::endl;
+            #endif
+            // if deta < 0 更新这个操作到布局中，更新fitness列表
+            if(deta < 0){
+                changeTile(isBaseline, originLoc, loc, inst);
+                // 间隔次数多了再更新这两
+                // calculRelatedRangeMap(isBaseline, rangeActualMap, instRelatedNetId);
+                // calculRelatedFitness(fitnessVec, rangeDesiredMap, rangeActualMap, instRelatedNetId);
+                cost = costNew;
+                sigmaVec.emplace_back(costNew);
+                // sortedFitness(fitnessVec);
+            }
+            else{
+                // else 取(0,1)随机数，判断随机数是否小于 e^(-deta/T) 是则同样更新操作，更新fitness列表
+                // 生成一个 0 到 1 之间的随机浮点数
+                double randomValue = generate_random_double(0.0, 1.0);
+                double eDetaT = exp(-deta/T);
+                #ifdef DEBUG
+                    std::cout<<"DEBUG-randomValue:"<<randomValue<<", eDetaT:"<<eDetaT<<std::endl;
+                #endif
+                if(randomValue < eDetaT){
                     changeTile(isBaseline, originLoc, loc, inst);
-                    calculrangeMap(isBaseline, rangeActualMap);
-                    calculFitness(fitnessVec, rangeDesiredMap, rangeActualMap);
+                    // 间隔次数多了再更新这两
+                    // calculRelatedRangeMap(isBaseline, rangeActualMap, instRelatedNetId);
+                    // calculRelatedFitness(fitnessVec, rangeDesiredMap, rangeActualMap, instRelatedNetId);
                     cost = costNew;
                     sigmaVec.emplace_back(costNew);
-                    // sortedFitness(fitnessVec);
                 }
-                else
-                {
-                    // else 取(0,1)随机数，判断随机数是否小于 e^(-deta/T) 是则同样更新操作，更新fitness列表
-                    // 生成一个 0 到 1 之间的随机浮点数
-                    double randomValue = generate_random_double(0.0, 1.0);
-                    double eDetaT = exp(-deta / T);
-#ifdef DEBUG
-                    std::cout << "DEBUG-randomValue:" << randomValue << ", eDetaT:" << eDetaT << std::endl;
-#endif
-                    if (randomValue < eDetaT)
-                    {
-                        changeTile(isBaseline, originLoc, loc, inst);
-                        calculrangeMap(isBaseline, rangeActualMap);
-                        calculFitness(fitnessVec, rangeDesiredMap, rangeActualMap);
-                        cost = costNew;
-                        sigmaVec.emplace_back(costNew);
+                else{ //复原
+                    if(isBaseline){
+                        inst->setBaseLocation(originLoc);
+                    } else{
+                        inst->setLocation(originLoc);
                     }
-                    else
-                    { // 复原
-                        if (isBaseline)
-                        {
-                            inst->setBaseLocation(originLoc);
-                        }
-                        else
-                        {
-                            inst->setLocation(originLoc);
-                        }
-                    }
-                }
-                // counterNet 计数+1
-                counterNet += 1;
-                // 当计数等于一个限制时，更新rangeActual 到 rangeDesired
-                if (counterNet == counterNetLimit)
-                {
-                    rangeDesiredMap = rangeActualMap;
-                    counterNet = 0;
                 }
             }
-            else
-            {
-                if (isBaseline)
-                {
-                    originLoc = inst->getBaseLocation();
-                    inst->setBaseLocation(loc);
-                }
-                else
-                {
-                    originLoc = inst->getLocation();
-                    inst->setLocation(loc);
-                }
-                costNew = getWirelength(isBaseline);
-                // deta = new_cost - cost
-                int deta = costNew - cost;
-#ifdef DEBUG
-                std::cout << "DEBUG-deta:" << deta << std::endl;
-#endif
-                // if deta < 0 更新这个操作到布局中，更新fitness列表
-                if (deta < 0)
-                {
-                    changeTile(isBaseline, originLoc, loc, inst);
-                    calculrangeMap(isBaseline, rangeActualMap);
-                    calculFitness(fitnessVec, rangeDesiredMap, rangeActualMap);
-                    cost = costNew;
-                    sigmaVec.emplace_back(costNew);
-                    // sortedFitness(fitnessVec);
-                }
-                else
-                {
-                    // else 取(0,1)随机数，判断随机数是否小于 e^(-deta/T) 是则同样更新操作，更新fitness列表
-                    // 生成一个 0 到 1 之间的随机浮点数
-                    double randomValue = generate_random_double(0.0, 1.0);
-                    double eDetaT = exp(-deta / T);
-#ifdef DEBUG
-                    std::cout << "DEBUG-randomValue:" << randomValue << ", eDetaT:" << eDetaT << std::endl;
-#endif
-                    if (randomValue < eDetaT)
-                    {
-                        changeTile(isBaseline, originLoc, loc, inst);
-                        calculrangeMap(isBaseline, rangeActualMap);
-                        calculFitness(fitnessVec, rangeDesiredMap, rangeActualMap);
-                        cost = costNew;
-                        sigmaVec.emplace_back(costNew);
-                    }
-                    else
-                    { // 复原
-                        if (isBaseline)
-                        {
-                            inst->setBaseLocation(originLoc);
-                        }
-                        else
-                        {
-                            inst->setLocation(originLoc);
-                        }
-                    }
-                }
-                // counterNet 计数+1
-                counterNet += 1;
-                // 当计数等于一个限制时，更新rangeActual 到 rangeDesired
-                if (counterNet == counterNetLimit)
-                {
-                    rangeDesiredMap = rangeActualMap;
-                    counterNet = 0;
-                }
+            // counterNet 计数+1
+            counterNet += 1;
+            if(counterNet % 100 == 0){
+                calculRelatedRangeMap(isBaseline, rangeActualMap, instRelatedNetId);
+                calculRelatedFitness(fitnessVec, rangeDesiredMap, rangeActualMap, instRelatedNetId);
+            }
+            // 当计数等于一个限制时，更新rangeActual 到 rangeDesired
+            if(counterNet == counterNetLimit){
+                rangeDesiredMap = rangeActualMap;
+                counterNet = 0;
             }
         }
-        if (timeup)
-            break; // 时间快到了，结束
-
+        if(timeup) break; //时间快到了，结束
+        
         double acceptRate = sigmaVec.size() / InnerIter;
         if (0.96 <= acceptRate)
         {
@@ -1292,3 +1327,4 @@ int arbsa(bool isBaseline)
     std::cout << "runtime: " << duration.count() << " s" << std::endl;
     return 0;
 }
+
