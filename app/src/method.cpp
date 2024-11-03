@@ -510,7 +510,7 @@ void matchLUTPairsThread(std::map<int, Instance *> &glbInstMap, std::vector<int>
 
         int currentLUTID = unmatchedLUTs[start];
         Instance *currentLUT = glbInstMap[currentLUTID];
-
+        int inputPinNum = currentLUT->getUsedNumInpins();
         {
             std::lock_guard<std::mutex> lock(lutMutex);
             if (matchedLUTs.find(currentLUTID) != matchedLUTs.end())
@@ -556,7 +556,7 @@ void matchLUTPairsThread(std::map<int, Instance *> &glbInstMap, std::vector<int>
                 std::unordered_set<int> unionPins = unionSets(currentLUTNets, otherLUTNets);
                 int totalInpins = unionPins.size();
 
-                if (sharedNetCount > maxSharedNets && totalInpins <= 6)
+                if (sharedNetCount > maxSharedNets && totalInpins == inputPinNum && currentLUTNets.size() == otherLUTNets.size())
                 {
                     maxSharedNets = sharedNetCount;
                     bestMatchedLUTID = otherLUTID;
@@ -660,8 +660,8 @@ void matchLUTPairs(std::map<int, Instance *> &glbInstMap, bool isLutPack, bool i
     {
         initializeSEQPlacementMap(glbInstMap);
         updateSEQLocations(seqPlacementMap);
-        updateInstancesToTiles();
     }
+    updateInstancesToTiles();
 }
 
 // PLB打包，将LUT组打包成PLB组
