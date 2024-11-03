@@ -3,9 +3,11 @@ report_arch
 
 read_design WorkSpace/public/Benchmark/public_release/case_10.nodes WorkSpace/public/Benchmark/public_release/case_10.nets WorkSpace/public/Benchmark/public_release/case_10.timing
 
-SA
-FM
+report_design 
 
-generateResult /home/pc/aibot/wbx/EDAElite/WorkSpace/public/Test/Result/case_10.nodes.out
+read_output WorkSpace/public/Test/Result/case_10.nodes.out
+
+report_wirelength
+legal_check
 
 exit

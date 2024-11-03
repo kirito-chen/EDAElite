@@ -3,9 +3,10 @@ build
 .vscode*
 checker
 log
-Result/*
 call*
 perf*
 FlameGraph
 getFlameGraph.sh
 *tar.gz
+Result
+WorkSpace/public/Test

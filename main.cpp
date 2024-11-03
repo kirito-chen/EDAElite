@@ -16,6 +16,9 @@
 #include "test.h"
 #include "arbsa.h"
 
+#include "global_placement_sa.h"
+
+#include <chrono>
 
 int main(int argc, char *argv[])
 {
@@ -77,6 +80,11 @@ int main(int argc, char *argv[])
 
     //基于baseline修改
     bool isBaseline = true;
+    readOutputNetlist(nodesFile);
+
+    matchLUTPairs(glbInstMap, true, false);
+    legalCheck();
+    reportWirelength();
     //设置isPLB数组
     setIsPLB();
     // 模拟退火
