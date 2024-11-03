@@ -77,7 +77,7 @@ int main(int argc, char *argv[])
     bool isBaseline = true;
     readOutputNetlist(nodesFile);
 
-    matchLUTPairs(glbInstMap);
+    matchLUTPairs(glbInstMap, true, false);
     legalCheck();
     reportWirelength();
     //设置isPLB数组

@@ -17,7 +17,7 @@ std::string getValue(const std::string& jsonContent, const std::string& key);
 int setIsPLB(); 
 
 // void initialPlacement();
-void matchLUTPairs(std::map<int, Instance*>& glbInstMap);
+void matchLUTPairs(std::map<int, Instance*>& glbInstMap, bool isLutPack = true, bool isSeqPack = true);
 void matchLUTGroupsToPLB(std::map<int, std::set<Instance*>> &lutGroups, std::map<int, std::set<std::set<Instance*>>> &plbGroups);
 // void assignLUTSiteInPLB(std::map<int, std::set<Instance*>> &plbGroups);
 

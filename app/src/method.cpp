@@ -264,9 +264,11 @@ void FM()
 }
 
 // 统计每种类型的数量
-void generateOutputFile(bool isBaseline, const std::string &filename) {
+void generateOutputFile(bool isBaseline, const std::string &filename)
+{
     std::ofstream outFile(filename);
-    if (!outFile) {
+    if (!outFile)
+    {
         std::cerr << "fail to open file " << filename << std::endl;
         return;
     }
@@ -302,9 +304,11 @@ void generateOutputFile(bool isBaseline, const std::string &filename) {
         int instID = instPair.first;
 
         // 获取实例的基础位置 (x, y, z)
-        std::tuple<int,int,int> loc;
-        if(isBaseline) loc = inst->getBaseLocation();
-        else loc = inst->getLocation();
+        std::tuple<int, int, int> loc;
+        if (isBaseline)
+            loc = inst->getBaseLocation();
+        else
+            loc = inst->getLocation();
         int x = std::get<0>(loc);
         int y = std::get<1>(loc);
         int z = std::get<2>(loc);
@@ -327,14 +331,16 @@ void generateOutputFile(bool isBaseline, const std::string &filename) {
     std::cout << "Result file generate in " << filename << std::endl;
 }
 
-//获取json文件信息
-std::string getValue(const std::string& jsonContent, const std::string& key) {
+// 获取json文件信息
+std::string getValue(const std::string &jsonContent, const std::string &key)
+{
     // 构造查找键的格式，例如："libFile":
     std::string searchKey = "\"" + key + "\":";
 
     // 找到键的位置
     size_t startPos = jsonContent.find(searchKey);
-    if (startPos == std::string::npos) {
+    if (startPos == std::string::npos)
+    {
         return "";
     }
 
@@ -346,21 +352,27 @@ std::string getValue(const std::string& jsonContent, const std::string& key) {
     return jsonContent.substr(startPos, endPos - startPos);
 }
 
-//赋值isPLB数组
-int setIsPLB(){
-    int numCol = chip.getNumCol(); //150
-    int numRow = chip.getNumRow(); //300
-    isPLB = new int*[numCol];
-    for (int i = 0; i < numCol; i++) {
+// 赋值isPLB数组
+int setIsPLB()
+{
+    int numCol = chip.getNumCol(); // 150
+    int numRow = chip.getNumRow(); // 300
+    isPLB = new int *[numCol];
+    for (int i = 0; i < numCol; i++)
+    {
         isPLB[i] = new int[numRow];
     }
-    Tile*** tileArray = chip.getTileArray();
-    for(int i = 0; i < numCol; i++){
-        for(int j = 0; j < numRow; j++){
-            if(tileArray[i][j] != nullptr && tileArray[i][j]->matchType("PLB")){
+    Tile ***tileArray = chip.getTileArray();
+    for (int i = 0; i < numCol; i++)
+    {
+        for (int j = 0; j < numRow; j++)
+        {
+            if (tileArray[i][j] != nullptr && tileArray[i][j]->matchType("PLB"))
+            {
                 isPLB[i][j] = 1;
             }
-            else{
+            else
+            {
                 isPLB[i][j] = 0;
             }
         }
@@ -576,7 +588,7 @@ void matchLUTPairsThread(std::map<int, Instance *> &glbInstMap, std::vector<int>
 }
 
 // 打包代码
-void matchLUTPairs(std::map<int, Instance *> &glbInstMap)
+void matchLUTPairs(std::map<int, Instance *> &glbInstMap, bool isLutPack, bool isSeqPack)
 {
     std::unordered_map<int, std::unordered_set<int>> lutNetMap; // LUT ID -> 连接的net ID集合（仅输入引脚）
     std::unordered_map<int, std::unordered_set<int>> netLUTMap; // Net ID -> 连接到该net的LUT ID集合
@@ -637,19 +649,19 @@ void matchLUTPairs(std::map<int, Instance *> &glbInstMap)
     {
         t.join(); // 等待所有线程完成
     }
-
-    size_t mapSize = lutGroups.size();
-    std::cout << "Matched Map size: " << mapSize << std::endl;
-    populateLUTGroups(glbInstMap);
-    refreshLUTGroups(lutGroups); // 这里会根据LUT组其中一个固定的位置修改另一个未固定的LUT位置并且将其固定
-    matchFixedLUTGroupsToPLB(lutGroups, plbGroups);
-    updatePLBLocations(plbGroups);
-    // printInstanceInformation();
-    // initializePLBPlacementMap(plbGroups);
-    initializeSEQPlacementMap(glbInstMap);
-    printInstanceInformation();
-    updateSEQLocations(seqPlacementMap);
-    updateInstancesToTiles();
+    if (isLutPack)
+    {
+        populateLUTGroups(glbInstMap);
+        refreshLUTGroups(lutGroups); // 这里会根据LUT组其中一个固定的位置修改另一个未固定的LUT位置并且将其固定
+        matchFixedLUTGroupsToPLB(lutGroups, plbGroups);
+        updatePLBLocations(plbGroups);
+    }
+    if (isSeqPack)
+    {
+        initializeSEQPlacementMap(glbInstMap);
+        updateSEQLocations(seqPlacementMap);
+        updateInstancesToTiles();
+    }
 }
 
 // PLB打包，将LUT组打包成PLB组
@@ -773,7 +785,6 @@ void matchFixedLUTGroupsToPLB(std::map<int, std::set<Instance *>> &lutGroups, st
                                 unmatchedLUTGroups.erase(groupID);
                             }
                         }
-                        
                     }
                 }
             }
@@ -789,7 +800,7 @@ void matchFixedLUTGroupsToPLB(std::map<int, std::set<Instance *>> &lutGroups, st
         // 检查tilePtr的DRAM占用情况，占用0则要去除LUT的0-3编号，占用1则要去除LUT的4-7编号
         std::vector<int> dramInTile = tilePtr->getFixedOptimizedDRAMGroups();
         int dramNum = dramInTile.size();
-        
+
         // 继续添加其他LUT组到当前PLB，直到达到限制或没有匹配项
         while (currentPLB.size() < MAX_LUT_CAPACITY - dramNum * 4)
         {
@@ -844,7 +855,6 @@ void matchFixedLUTGroupsToPLB(std::map<int, std::set<Instance *>> &lutGroups, st
                         currentPLB.insert(lutGroups[bestMatchedGroupID]);
                         lut->setPLBGroupID(currentPLBID); // 设置plbGroupID
                     }
-                    
                 }
             }
             else
@@ -856,8 +866,6 @@ void matchFixedLUTGroupsToPLB(std::map<int, std::set<Instance *>> &lutGroups, st
         // 将当前PLB添加到plbGroups
         plbGroups[currentPLBID] = currentPLB;
     }
-    printPLBInformation();
-    printInstanceInformation();
 
     // 遍历所有LUT组，检查未分配的PLBGroupID的组
     std::set<int> unassignedLUTGroups;
@@ -893,9 +901,6 @@ void matchFixedLUTGroupsToPLB(std::map<int, std::set<Instance *>> &lutGroups, st
         plbGroups[newPLBID].insert(newPLBGroup);   // 添加到plbGroups
         unassignedLUTGroups.erase(currentGroupID); // 从未分配列表中移除
     }
-
-    printInstanceInformation();
-    printPLBInformation();
 
     std::cout << "plbGroups size : " << plbGroups.size() << std::endl;
 }
@@ -1029,7 +1034,6 @@ void matchLUTGroupsToPLB(std::map<int, std::set<Instance *>> &lutGroups, std::ma
                                     unmatchedLUTGroups.erase(groupID);
                                 }
                             }
-                            
                         }
                     }
                 }
@@ -1160,8 +1164,6 @@ void matchLUTGroupsToPLB(std::map<int, std::set<Instance *>> &lutGroups, std::ma
         plbGroups[newPLBID].insert(newPLBGroup);   // 添加到plbGroups
         unassignedLUTGroups.erase(currentGroupID); // 从未分配列表中移除
     }
-
-    // printPLBInformation();
 
     std::cout << "plbGroups size : " << plbGroups.size() << std::endl;
 }
@@ -1601,33 +1603,7 @@ bool updateInstancesToTiles()
                 }
             }
         }
-        
     }
-    legalCheck();
-    int totalLUTCount = 0;
-    for (const auto &plbPair : plbGroups)
-    {
-        bool isplbinitialed = false;
-        const auto &lutGroupSet = plbPair.second;
-        int a = 0;
-        // 遍历每个 LUT 组
-        for (const auto &lutGroup : lutGroupSet)
-        {
-            for (Instance *instance : lutGroup)
-            {
-                if (!instance->isLUTInitial() && instance->isFixed())
-                {
-                    isplbinitialed = true;
-                }
-            }
-        }
-        if (isplbinitialed)
-        {
-            totalLUTCount++;
-        }
-    }
-    std::cout << "未能安置的LUT的数目 : " << totalLUTCount << std::endl;
-
     //-------------------------------------------------------------------------------
     // 创建一个向量存储未固定的PLB组
     std::vector<std::set<std::set<Instance *>>> nonFixedPLBGrouptList;
@@ -1765,30 +1741,6 @@ bool updateInstancesToTiles()
             }
         }
     }
-
-    totalLUTCount = 0;
-    for (const auto &plbPair : plbGroups)
-    {
-        bool isplbinitialed = false;
-        const auto &lutGroupSet = plbPair.second;
-        int a = 0;
-        // 遍历每个 LUT 组
-        for (const auto &lutGroup : lutGroupSet)
-        {
-            for (Instance *instance : lutGroup)
-            {
-                if (!instance->isLUTInitial())
-                {
-                    isplbinitialed = true;
-                }
-            }
-        }
-        if (isplbinitialed)
-        {
-            totalLUTCount++;
-        }
-    }
-    std::cout << "未能安置的PLB组的数目 : " << totalLUTCount << std::endl;
     //-------------------------------------------------------------------------------
 
     // 将seq放置在tile上，并进行合法化处理
@@ -1811,7 +1763,7 @@ bool updateInstancesToTiles()
             if (!tilePtr->getTileTypes().count("PLB"))
             {
                 std::cout << "Error: Tile at (" << x << ", " << y << ") is not a PLB." << std::endl;
-                
+
                 auto neighbors = getNeighborTile(x, y); // 找下一个tile位置
                 x = std::get<0>(neighbors);
                 y = std::get<1>(neighbors);
@@ -1903,9 +1855,6 @@ bool updateInstancesToTiles()
             }
         }
     }
-
-    printPLBInformation();
-
     return true; // 返回成功
 }
 
@@ -1931,6 +1880,11 @@ void printPLBInformation()
     int totalLUTCount = 0;
     for (const auto &plbPair : plbGroups)
     {
+        if (plbPair.first == 922)
+        {
+            int dummy = 0;
+        }
+        
         const auto &lutGroupSet = plbPair.second;
         int a = 0;
         // 遍历每个 LUT 组
