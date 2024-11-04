@@ -128,7 +128,8 @@ public:
     void clearInstances();
     void clearBaselineInstances();
     void clearOptimizedInstances();
-    void clearLUTandSEQOptimizedInstances(); // 只清理LUT和SEQ
+    void clearLUTOptimizedInstances();
+    void clearSEQOptimizedInstances();
     std::map<std::string, slotArr>::iterator getInstanceMapBegin() { return instanceMap.begin(); }
     std::map<std::string, slotArr>::iterator getInstanceMapEnd() { return instanceMap.end(); }
     slotArr *getInstanceByType(std::string type);

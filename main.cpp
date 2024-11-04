@@ -87,10 +87,78 @@ int main(int argc, char *argv[])
     matchLUTPairs(glbInstMap, true, false);
     // legalCheck();
     // reportWirelength();
+    int x,y,z;
+    for(auto& it : glbInstMap){
+        Instance* inst = it.second;
+        if((inst->getModelName()).substr(0,3) != "LUT"){
+            continue;
+        }
+        std::tie(x,y,z) = inst->getLocation();
+        if(inst->getMatchedLUTID() != -1){
+            int xx,yy,zz;
+            Instance* anotherInst = glbInstMap[inst->getMatchedLUTID()];
+            std::tie(xx,yy,zz)= anotherInst->getLocation();
+            if(xx != x || yy != y || zz != z){
+                std::cout<<"before inst: "<<inst->getInstanceName()<<" no match loc"<<
+                " x "<<x<<" y "<<y<<" z "<<z <<
+                " xx "<<xx<<" yy "<<yy<<" zz "<<zz
+                <<std::endl;
+            }
+        }
+        int instId = std::stoi(inst->getInstanceName().substr(5));
+        Tile* tileCur = chip.getTile(x,y);
+        slotArr *slotArrCur = tileCur->getInstanceByType("LUT"); //LUT or SEQ
+        Slot* slot = slotArrCur->at(z);
+        std::list<int>& instances = slot->getOptimizedInstancesRef();
+        // 
+        bool matched = false;
+        for(int instIdTmp : instances){
+            if(instId == instIdTmp){
+                matched = true;
+                break;
+            }
+        }
+        if(!matched) std::cout<<"before inst: "<<inst->getInstanceName()<<" no match slot"<<std::endl;
+        
+    }
     //设置isPLB数组
     setIsPLB();
     // 模拟退火
     arbsa(isBaseline);
+
+    for(auto& it : glbInstMap){
+        Instance* inst = it.second;
+        if((inst->getModelName()).substr(0,3) != "LUT"){
+            continue;
+        }
+        std::tie(x,y,z) = inst->getLocation();
+        if(inst->getMatchedLUTID() != -1){
+            int xx,yy,zz;
+            Instance* anotherInst = glbInstMap[inst->getMatchedLUTID()];
+            std::tie(xx,yy,zz)= anotherInst->getLocation();
+            if(xx != x || yy != y || zz != z){
+                std::cout<<"after inst: "<<inst->getInstanceName()<<" no match loc"<<
+                " x "<<x<<" y "<<y<<" z "<<z <<
+                " xx "<<xx<<" yy "<<yy<<" zz "<<zz
+                <<std::endl;
+            }
+        }
+        int instId = std::stoi(inst->getInstanceName().substr(5));
+        Tile* tileCur = chip.getTile(x,y);
+        slotArr *slotArrCur = tileCur->getInstanceByType("LUT"); //LUT or SEQ
+        Slot* slot = slotArrCur->at(z);
+        std::list<int>& instances = slot->getOptimizedInstancesRef();
+        // 
+        bool matched = false;
+        for(int instIdTmp : instances){
+            if(instId == instIdTmp){
+                matched = true;
+                break;
+            }
+        }
+        if(!matched) std::cout<<"after inst:"<<inst->getInstanceName()<<" no match slot"<<std::endl;
+        
+    }
 
     //生成结果
     generateOutputFile(isBaseline, outFile);

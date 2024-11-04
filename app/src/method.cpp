@@ -1547,7 +1547,7 @@ bool updateInstancesToTiles()
         for (int j = 0; j < chip.getNumRow(); j++)
         {
             Tile *tile = chip.getTile(i, j);
-            tile->clearLUTandSEQOptimizedInstances(); // 清理 LUT 和 SEQ 类型的实例
+            tile->clearLUTOptimizedInstances(); // 清理 LUT 和 SEQ 类型的实例
         }
     }
 

@@ -218,12 +218,27 @@ void Tile::clearOptimizedInstances()
   }
 }
 
-// 只清理LUT和SEQ
-void Tile::clearLUTandSEQOptimizedInstances()
+// 只清理LUT
+void Tile::clearLUTOptimizedInstances()
 {
   for (auto &pair : instanceMap)
   {
-    if (pair.first == "LUT" || pair.first == "SEQ")
+    if (pair.first == "LUT")
+    {
+      for (auto &slot : pair.second)
+      {
+        slot->clearOptimizedInstances();
+      }
+    }
+  }
+}
+
+// 只清理SEQ
+void Tile::clearSEQOptimizedInstances()
+{
+  for (auto &pair : instanceMap)
+  {
+    if (pair.first == "SEQ")
     {
       for (auto &slot : pair.second)
       {
