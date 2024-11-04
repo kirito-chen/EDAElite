@@ -553,6 +553,9 @@ int arbsa(bool isBaseline){
 
     // 初始布局
     
+    //懒加载，算到再加进去，用空间换时间。key: instId  value: instRelatedNetId
+    std::map<int, std::set<int>> instRelatedNetIdMap;
+
     // 构造 fitness 优先级列表 初始化 rangeDesired  
     std::vector<std::pair<int,float>> fitnessVec; // 第一个是netId，第二个是适应度fitness, 适应度越小表明越需要移动。后续会按照fitness升序排列
     std::map<int, int> rangeDesiredMap; // 第一个是netId，第二个是外框矩形的平均跨度，即半周线长的一半
@@ -656,10 +659,27 @@ int arbsa(bool isBaseline){
     std::cout<<"[INFO] initial temperature T= "<< T <<", threshhold= "<<threashhold<<", alpha= "<<alpha<< ", InnerIter= "<<InnerIter<<", seed="<<seed<<std::endl;
 
     bool timeup = false;
+    int epsilon = 1;  // 设置收敛阈值
+    int exterIter = 0;
+    int costPre = cost;
     // 外层循环 温度大于阈值， 更新一次fitness优先级列表
     while(T > threashhold){
         //记录接受的new_cost
         std::vector<int> sigmaVec; 
+        //截断循环 判断是否收敛
+        /*
+        if(exterIter >= 10){
+            exterIter = 0;
+            int detaCost = std::abs(costPre - cost);
+            // std::cout<<cost <<'-'<<costPre<<'='<<detaCost<<std::endl;
+            if(detaCost < epsilon){
+                break;
+            }
+            else{
+                costPre = cost;
+            }
+        }
+        exterIter++;  // exterIter + 1 = Iter + 2000 */
         // 内层循环 小于内层迭代次数
         while(Iter < InnerIter){
             if(Iter % 100 == 0) {
@@ -699,19 +719,28 @@ int arbsa(bool isBaseline){
                 // 没找到合适位置
                 continue;
             }
+            //空间换时间
             //找到这个inst附近的net
             std::set<int> instRelatedNetId;
-            //访问inputpin
-            for(auto& pin: inst->getInpins()){
-                int netId = pin->getNetID();
-                //-1表示未连接
-                if(netId != -1) instRelatedNetId.insert(pin->getNetID());
+            int instId = std::stoi(inst->getInstanceName().substr(5));  // inst_xxx 从第5个字符开始截取，转换为整数
+            if(instRelatedNetIdMap.count(instId)){
+                //找得到
+                instRelatedNetId = instRelatedNetIdMap[instId];
             }
-            //访问outputpin
-            for(auto& pin: inst->getOutpins()){
-                int netId = pin->getNetID();
-                //-1表示未连接
-                if(netId != -1) instRelatedNetId.insert(pin->getNetID());
+            else{
+                //访问inputpin
+                for(auto& pin: inst->getInpins()){
+                    int netId = pin->getNetID();
+                    //-1表示未连接
+                    if(netId != -1) instRelatedNetId.insert(pin->getNetID());
+                }
+                //访问outputpin
+                for(auto& pin: inst->getOutpins()){
+                    int netId = pin->getNetID();
+                    //-1表示未连接
+                    if(netId != -1) instRelatedNetId.insert(pin->getNetID());
+                }
+                instRelatedNetIdMap[instId] = instRelatedNetId;  //记录下来。下次这个instId就不需要运算了
             }
             
             // 计算移动后的newCost
