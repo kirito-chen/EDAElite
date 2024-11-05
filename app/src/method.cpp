@@ -250,3 +250,97 @@ int setIsPLB(){
     // outputFile.close();
     return 0;
 }
+
+//统计信息
+void statistics(){
+    /*
+    //统计节点数量与线网数量
+    int numInst, numNet;
+    numInst = glbInstMap.size();
+    numNet = glbNetMap.size();
+    int numLUT = 0, numSEQ = 0, numFixed = 0;
+    for(auto& it : glbInstMap){
+        Instance* inst = it.second;
+        if((inst->getModelName()).substr(0,3) == "LUT"){
+            numLUT++;
+        }
+        else if((inst->getModelName()).substr(0,3) == "SEQ"){
+            numSEQ++;
+        }
+        if(inst->isFixed()){
+            numFixed++;
+        }
+    }
+    
+    std::ofstream outputFile;
+    outputFile.open("info/caseInfo.csv", std::ios::app);
+    outputFile<<numInst<<','<<numLUT<<','<<numSEQ<<','<<numFixed<<","<<numNet<<std::endl;
+    outputFile.close();
+    exit(6);
+    /*****统计完全一样的inst*****/
+    //统计inst2Net
+    std::map<int, std::set<int>> instId2netId;
+    for(auto& it : glbInstMap){
+        Instance* inst = it.second;
+        int instId = std::stoi(inst->getInstanceName().substr(5));
+        std::set<int> netIdSet;
+        std::vector<Pin*> inpins = inst->getInpins();
+        for(Pin* pin : inpins){
+            int netId = pin->getNetID();
+            netIdSet.insert(netId);
+        }
+        std::vector<Pin*> outpins = inst->getOutpins();
+        for(Pin* pin : outpins){
+            int netId = pin->getNetID();
+            netIdSet.insert(netId);
+        }
+        instId2netId[instId] = netIdSet;
+    }
+    //是否具有与之一样连接情况完全一样的另一个inst  0为没有 1为有
+    std::vector<int> connectedSame(glbInstMap.size(), 0);
+    for(auto& it : glbInstMap){
+        Instance* inst = it.second;
+        int instId = std::stoi(inst->getInstanceName().substr(5));
+        if(connectedSame[instId]) continue;
+        for(auto& it2 : glbInstMap){
+            Instance* inst2 = it2.second;
+            int instId2 = std::stoi(inst2->getInstanceName().substr(5));
+            if(instId == instId2){
+                continue;
+            }
+            //判断net是否一致
+            std::set<int> netIdSet1 = instId2netId[instId];
+            std::set<int> netIdSet2 = instId2netId[instId2];
+            if(netIdSet1 == netIdSet2){
+                //大小一致才能对比
+                connectedSame[instId] = 1;
+                connectedSame[instId2] = 1;
+                break;
+            }
+        }
+    }
+    std::ofstream outputFile;
+    outputFile.open("info/connectedSame.csv", std::ios::app);
+    int connectedNum = 0;
+    for(int i = 0; i < connectedSame.size(); i++){
+        if(connectedSame[i]){
+            connectedNum ++;
+        }
+    }
+    outputFile<<connectedNum<<std::endl;
+    outputFile.close();
+    exit(6);
+    
+}
+
+//提取node文件的数字
+int extractNumber(const std::string& filePath) {
+    std::regex pattern(R"(case_(\d+)\.nodes)");  // 正则表达式：匹配"case_"后面的数字，直到".nodes"
+    std::smatch match;
+
+    if (std::regex_search(filePath, match, pattern)) {
+        return std::stoi(match[1]);  // 提取并转换为整数
+    } else {
+        throw std::runtime_error("无法从文件名中提取数字");
+    }
+}

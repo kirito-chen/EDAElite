@@ -10,3 +10,4 @@ FlameGraph
 getFlameGraph.sh
 *tar.gz
 analysis
+*.bin

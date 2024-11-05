@@ -15,6 +15,7 @@
 #include "method.h"
 #include "test.h"
 #include "arbsa.h"
+#include "binary.h"
 
 
 int main(int argc, char *argv[])
@@ -75,12 +76,17 @@ int main(int argc, char *argv[])
     }
     std::cout << "  Successfully read design files." << std::endl;
 
+    //统计信息
+    // statistics();
+    
+
+
     //基于baseline修改
     bool isBaseline = true;
     //设置isPLB数组
     setIsPLB();
     // 模拟退火
-    arbsa(isBaseline);
+    arbsa(isBaseline, nodesFile);
 
     //生成结果
     generateOutputFile(isBaseline, outFile);

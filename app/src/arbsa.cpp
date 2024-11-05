@@ -2,12 +2,14 @@
 #include "global.h"
 #include "object.h"
 #include "arbsa.h"
+#include "method.h"
 #include <algorithm>
 #include <cmath>
 #include "wirelength.h"
 #include <random>
 // 计时
 #include <chrono>
+#include "binary.h"
 
 // #define DEBUG
 
@@ -547,7 +549,25 @@ int changeTile(bool isBaseline, std::tuple<int, int, int> originLoc, std::tuple<
     return 0;
 }
 
-int arbsa(bool isBaseline){
+int arbsa(bool isBaseline, std::string nodesFile){
+    /*
+    std::vector<std::pair<int, int>> data = { {1, 2}, {2, 3}, {3, 5} };
+    
+    std::string fileName = "data.bin";
+    // writeBinary(fileName, data);
+
+    if(fileExists(fileName)){
+        data = readBinary(fileName);
+        for(auto& a : data){
+            std::cout<<a.first<<' '<<a.second<<"\n";
+        }
+    }
+    else{
+        data = { {13, 23}, {23, 33}, {33, 53} };
+    }
+    writeBinary(fileName, data);
+    exit(1); */
+
     // 记录开始时间
     auto start = std::chrono::high_resolution_clock::now();
 
@@ -655,19 +675,38 @@ int arbsa(bool isBaseline){
     if(standardDeviation != 0){
         T = 0.5 * standardDeviation;
     }
-    std::cout<<"[INFO] The simulated annealing algorithm starts "<< std::endl;
-    std::cout<<"[INFO] initial temperature T= "<< T <<", threshhold= "<<threashhold<<", alpha= "<<alpha<< ", InnerIter= "<<InnerIter<<", seed="<<seed<<std::endl;
+    
 
     bool timeup = false;
     int epsilon = 1;  // 设置收敛阈值
     int exterIter = 0;
     int costPre = cost;
+
+    //读取次数
+    int caseNumber = extractNumber(nodesFile);
+    int exterLimit = -1;
+    std::string dataFile = "data.bin";
+    std::vector<std::pair<int, int>> data;
+    if(fileExists(dataFile)){
+        data = readBinary(dataFile);
+        for(auto& t : data){
+            if(t.first == caseNumber){
+                //找到了参数
+                exterLimit = t.second;
+                break;
+            }
+        }
+    }
+    std::cout<<"[INFO] The simulated annealing algorithm starts "<< std::endl;
+    std::cout<<"[INFO] initial temperature T= "<< T <<", threshhold= "<<threashhold<<", alpha= "<<
+                alpha<< ", InnerIter= "<<InnerIter<<", seed= "<<seed<<", exterLimit= "<<exterLimit<<std::endl;
+
     // 外层循环 温度大于阈值， 更新一次fitness优先级列表
     while(T > threashhold){
         //记录接受的new_cost
-        std::vector<int> sigmaVec; 
-        //截断循环 判断是否收敛
+        std::vector<int> sigmaVec;       
         /*
+        //截断循环 判断是否收敛
         if(exterIter >= 10){
             exterIter = 0;
             int detaCost = std::abs(costPre - cost);
@@ -678,20 +717,35 @@ int arbsa(bool isBaseline){
             else{
                 costPre = cost;
             }
+        }*/
+        exterIter++;  // exterIter + 1 = Iter + 2000 
+        if(exterLimit > 0){
+            if(exterIter >= exterLimit){
+                break;
+            }
         }
-        exterIter++;  // exterIter + 1 = Iter + 2000 */
+        else{
+            auto tmp = std::chrono::high_resolution_clock::now();
+            // 计算运行时间
+            std::chrono::duration<double> durationtmp = tmp - start;
+            if(durationtmp.count() >= timeLimit){  //1180
+                timeup = true;
+                data.emplace_back(std::make_pair(caseNumber, exterIter));
+                break;
+            }
+        }
         // 内层循环 小于内层迭代次数
         while(Iter < InnerIter){
-            if(Iter % 100 == 0) {
-                auto tmp = std::chrono::high_resolution_clock::now();
-                // 计算运行时间
-                std::chrono::duration<double> durationtmp = tmp - start;
-                if(durationtmp.count() >= timeLimit){  //1180
-                    timeup = true;
-                    break;
-                }
-                std::cout<<"[INFO] T:"<< std::scientific << std::setprecision(3) <<T <<" iter:"<<std::setw(4)<<Iter<<" alpha:"<<std::fixed<<std::setprecision(2)<<alpha<<" cost:"<<std::setw(7)<<cost<<std::endl;
-            }
+            // if(Iter % 100 == 0) {
+                // auto tmp = std::chrono::high_resolution_clock::now();
+                // // 计算运行时间
+                // std::chrono::duration<double> durationtmp = tmp - start;
+                // if(durationtmp.count() >= timeLimit){  //1180
+                //     timeup = true;
+                //     break;
+                // }
+                // std::cout<<"[INFO] T:"<< std::scientific << std::setprecision(3) <<T <<" iter:"<<std::setw(4)<<Iter<<" alpha:"<<std::fixed<<std::setprecision(2)<<alpha<<" cost:"<<std::setw(7)<<cost<<std::endl;
+            // }
             // std::cout<<"[INFO] T:"<< std::scientific << std::setprecision(3) <<T <<" iter:"<<std::setw(4)<<Iter<<" alpha:"<<std::fixed<<std::setprecision(2)<<alpha<<" cost:"<<std::setw(7)<<cost<<std::endl;
             Iter++;
             // 根据fitness列表选择一个net
@@ -830,6 +884,9 @@ int arbsa(bool isBaseline){
         // 排序fitness列表
         sortedFitness(fitnessVec);
     }
+    
+    //记录截止次数
+    writeBinary(dataFile, data);
     
     // 记录结束时间
     auto end = std::chrono::high_resolution_clock::now();
