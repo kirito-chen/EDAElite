@@ -7,8 +7,6 @@
 #include <cmath>
 #include "wirelength.h"
 #include <random>
-// 计时
-#include <chrono>
 #include "binary.h"
 
 // #define DEBUG
@@ -556,9 +554,7 @@ int changeTile(bool isBaseline, std::tuple<int, int, int> originLoc, std::tuple<
     return 0;
 }
 
-int arbsa(bool isBaseline, std::string nodesFile){
-    // 记录开始时间
-    auto start = std::chrono::high_resolution_clock::now();
+int arbsa(bool isBaseline, std::string nodesFile, const std::chrono::time_point<std::chrono::high_resolution_clock>& start){
 
     /*********参数初始化********/ 
     // 初始化迭代次数Iter、初始化温度T 冷却计划
@@ -578,7 +574,7 @@ int arbsa(bool isBaseline, std::string nodesFile){
     const int seed = 999;  // 999 888
     set_random_seed(seed);
     //时间限制
-    const int timeLimit = 60; //1180  3580
+    const int timeLimit = 1180; //1180  3580
     //设置引脚数超过该数字的net为bigNet
     const int pinNumLimit = 5000; //5000
 
@@ -934,7 +930,7 @@ int arbsa(bool isBaseline, std::string nodesFile){
     std::chrono::duration<double> duration = end - start;
 
     // 输出运行时间（单位为秒）
-    std::cout << "runtime: " << duration.count() << " s" << std::endl;
+    std::cout << "SA runtime: " << duration.count() << " s" << std::endl;
     //计算平均每次运行时间
     std::cout << "runtime/exterLimit:" << duration.count() / (exterLimit-1) <<" runtime/iter:" << duration.count() / ((exterLimit-1)*2000)<< std::endl;
 

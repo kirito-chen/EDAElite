@@ -18,6 +18,7 @@
 #include "binary.h"
 
 
+
 int main(int argc, char *argv[])
 {
     if (argc != 5)
@@ -29,6 +30,10 @@ int main(int argc, char *argv[])
     std::string netsFile = argv[2];
     std::string timingFile = argv[3];
     std::string outFile = argv[4];
+
+    // 记录开始时间
+    const std::chrono::time_point<std::chrono::high_resolution_clock> start = std::chrono::high_resolution_clock::now();
+
 
     //读框架
     // 打开 JSON 文件
@@ -86,7 +91,7 @@ int main(int argc, char *argv[])
     //设置isPLB数组
     setIsPLB();
     // 模拟退火
-    arbsa(isBaseline, nodesFile);
+    arbsa(isBaseline, nodesFile, start);
 
     //生成结果
     generateOutputFile(isBaseline, outFile);

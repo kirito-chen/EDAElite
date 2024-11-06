@@ -30,6 +30,6 @@ else
         output_nodes="Result/case_${i}_out.nodes"
         # 执行命令
         $program "$input_nodes" "$input_nets" "$input_timing" "$output_nodes"
-        # ./checker/checker checker/case${i}.run
+        ./checker/checker checker/case${i}.run
     done
 fi
