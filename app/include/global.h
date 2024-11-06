@@ -15,3 +15,5 @@ extern Arch chip;
 extern RecSteinerMinTree rsmt;
 extern std::string lineBreaker;
 extern int** isPLB;
+extern std::set<int> glbBigNet; //存储引脚数过大的netid 
+extern int glbBigNetPinNum; //bigNet的引脚和 默认为0

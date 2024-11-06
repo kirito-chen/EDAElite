@@ -344,3 +344,23 @@ int extractNumber(const std::string& filePath) {
         throw std::runtime_error("无法从文件名中提取数字");
     }
 }
+
+//如果存在 引脚数 > pinNum的netId 的net则返回true，id存储在 glbBigNet 中
+bool findBigNetId(int pinNumLimit){
+    bool hasBigNet = false;
+    for(const auto& it : glbNetMap){
+        int netId = it.first;
+        Net* net = it.second;
+        if(net->isClock()){ //跳过clock 不参与线长计算
+            continue;
+        }
+        int pinNum = 1 + (net->getOutputPins()).size(); //+1是唯一的O_x 也就是这里唯一的inpin
+        if(pinNum > pinNumLimit){
+            glbBigNet.insert(netId);
+            glbBigNetPinNum += pinNum;
+        }
+    }
+    if(glbBigNet.size() > 0) hasBigNet = true;
+    return hasBigNet;
+}
+

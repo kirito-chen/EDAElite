@@ -41,7 +41,7 @@ int reportWirelength()
 }
 
 //cjq modify 获取线长
-int getWirelength(bool isBaseline){
+int getWirelength(bool isBaseline, std::string wlType /*= "default"*/){
   int totalCritWirelength = 0;
   int totalWirelength = 0;
   for (auto iter : glbNetMap)
@@ -51,8 +51,15 @@ int getWirelength(bool isBaseline){
     {
       continue;
     }
-    totalCritWirelength += net->getCritWireLength(isBaseline);
-    totalWirelength += net->getNonCritWireLength(isBaseline);
+    if(wlType == "default"){
+      totalCritWirelength += net->getCritWireLength(isBaseline);
+      totalWirelength += net->getNonCritWireLength(isBaseline);
+    }
+    else if(wlType == "HPWL"){
+      totalCritWirelength += net->getCritHPWL(isBaseline);
+      totalWirelength += net->getNonCritHPWL(isBaseline);
+    }
+   
   }
 
   // append critical wirelength to total wirelength
@@ -61,7 +68,7 @@ int getWirelength(bool isBaseline){
 }
 
 // cjq modify 获取inst相关net的线长
-int getRelatedWirelength(bool isBaseline, const std::set<int>& instRelatedNetId){  
+int getRelatedWirelength(bool isBaseline, const std::set<int>& instRelatedNetId, std::string wlType /*= "default"*/){  
   int totalCritWirelength = 0;
   int totalWirelength = 0;
   for (int i : instRelatedNetId)
@@ -72,8 +79,14 @@ int getRelatedWirelength(bool isBaseline, const std::set<int>& instRelatedNetId)
       {
         continue;
       }
-      totalCritWirelength += net->getCritWireLength(isBaseline);
-      totalWirelength += net->getNonCritWireLength(isBaseline);
+      if(wlType == "default"){
+        totalCritWirelength += net->getCritWireLength(isBaseline);
+        totalWirelength += net->getNonCritWireLength(isBaseline);
+      }
+      else if(wlType == "HPWL"){
+        totalCritWirelength += net->getCritHPWL(isBaseline);
+        totalWirelength += net->getNonCritHPWL(isBaseline);
+      }
     }
     else{
       std::cout<<"getRelatedWirelength can not find this netId:"<<i<<std::endl;
@@ -110,7 +123,7 @@ int getHPWL(bool isBaseline){
     locXSet.insert(x);
     locYSet.insert(y);
     //outpin
-    std::list<Pin*> outputPin = net->getOutputPins();
+    std::list<Pin*>& outputPin = net->getOutputPins();
     for(auto pin : outputPin){
       Instance* inst = pin->getInstanceOwner();
       if(isBaseline){

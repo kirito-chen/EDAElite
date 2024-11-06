@@ -1614,6 +1614,7 @@ int Net::setNetHPWL(bool isBaseline) // cjq modify, netArea最小外包矩形也
     netArea[3] = yMax;
   }
   HPWL = wirelength;
+  return 0;
 }
 
 int Net::getCritHPWL(bool isBaseline) // cjq modify

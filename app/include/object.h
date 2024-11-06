@@ -353,7 +353,7 @@ public:
     void setInpin(Pin* pin) { inpin = pin; }
 
     // Getter and setter for outputPins
-    std::list<Pin*> getOutputPins() const { return outputPins; }
+    std::list<Pin*>& getOutputPins() { return outputPins; }
     void addOutputPin(Pin* pin) { outputPins.push_back(pin); }
 
     int setNetHPWL(bool isBaseline); // cjq 设置每个net的半周线长
