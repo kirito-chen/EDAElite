@@ -6,7 +6,7 @@
 #include "arch.h"
 #include "global.h"
 #include "legal.h"
-
+#include "arbsa.h"
 #include <unordered_map>
 #include <unordered_set>
 
@@ -37,3 +37,4 @@ void sortPLBGrouptList(std::vector<std::set<std::set<Instance*>>>& nonFixedPLBGr
 void matchFixedLUTGroupsToPLB(std::map<int, std::set<Instance *>> &lutGroups, std::map<int, std::set<std::set<Instance *>>> &plbGroups);
 void printInstanceInformation();
 std::tuple<int, int> getNeighborTile(int x, int y);
+int calculateTwoInstanceWireLength(Instance* inst1, Instance* inst2, bool isBaseLine);

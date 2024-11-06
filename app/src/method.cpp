@@ -533,6 +533,13 @@ void matchLUTPairsThread(std::map<int, Instance *> &glbInstMap, std::vector<int>
 
                 Instance *otherLUT = glbInstMap[otherLUTID];
 
+                // 距离限制判断
+                int twoinstwirelength = calculateTwoInstanceWireLength(currentLUT, otherLUT, false);
+                if (twoinstwirelength >= 10)
+                {
+                    continue;
+                }
+
                 {
                     std::lock_guard<std::mutex> lock(lutMutex);
                     if (matchedLUTs.find(otherLUTID) != matchedLUTs.end())
@@ -1547,7 +1554,7 @@ bool updateInstancesToTiles()
         for (int j = 0; j < chip.getNumRow(); j++)
         {
             Tile *tile = chip.getTile(i, j);
-            tile->clearLUTOptimizedInstances(); // 清理 LUT 和 SEQ 类型的实例
+            tile->clearLUTOptimizedInstances(); // 清理 LUT 类型的实例
         }
     }
 
@@ -1643,100 +1650,171 @@ bool updateInstancesToTiles()
                 tilePtr = chip.getTile(std::get<0>(newLocation), std::get<1>(newLocation));
             }
         }
-        // tilePtr有定义且有足够的资源放下lutGroupSet
-        if (tilePtr && lutGroupSet.size() <= tilePtr->getLUTCount())
+
+        const auto &oneLUTGroup = *lutGroupSet.begin();
+        int lutGroupNum = oneLUTGroup.size();
+        if (lutGroupNum == 2)
         {
-            // std::set<int> availableSites = {0, 1, 2, 3, 4, 5, 6, 7};
-            // 获取 "LUT" 类型的 slotArr 指针
-            slotArr *slots = tilePtr->getInstanceByType("LUT");
-            if (slots != nullptr)
+            // tilePtr有定义且有足够的资源放下lutGroupSet
+            if (tilePtr && lutGroupSet.size() <= tilePtr->getLUTCount())
             {
-                // 移除已使用的编号
-                for (size_t i = 0; i < slots->size(); ++i)
+                // std::set<int> availableSites = {0, 1, 2, 3, 4, 5, 6, 7};
+                // 获取 "LUT" 类型的 slotArr 指针
+                slotArr *slots = tilePtr->getInstanceByType("LUT");
+                if (slots != nullptr)
                 {
-                    if (!(*slots)[i]->getOptimizedInstances().empty())
+                    // 移除已使用的编号
+                    for (size_t i = 0; i < slots->size(); ++i)
                     {
-                        availableSites.erase(i);
+                        if (!(*slots)[i]->getOptimizedInstances().empty())
+                        {
+                            availableSites.erase(i);
+                        }
+                    }
+                }
+                for (const auto &lutGroup : lutGroupSet)
+                {
+                    int siteIndex = *availableSites.begin();
+                    for (Instance *instance : lutGroup)
+                    {
+                        instance->setLocation(std::make_tuple(std::get<0>(newLocation), std::get<1>(newLocation), siteIndex));
+                        int instID = instance->getInstID();
+                        if (tilePtr->addInstance(instID, siteIndex, instance->getModelName(), false))
+                        {
+                            instance->setLUTInitial(true);
+                            availableSites.erase(siteIndex);
+                        }
+                        else
+                        {
+                            std::cout << "Error: Failed to add non-fixed instance " << instance->getInstanceName()
+                                      << " to tile at " << std::get<0>(newLocation) << ", "
+                                      << std::get<1>(newLocation) << std::endl;
+                            return false;
+                        }
                     }
                 }
             }
-            for (const auto &lutGroup : lutGroupSet)
+            else
             {
-                int siteIndex = *availableSites.begin();
-                for (Instance *instance : lutGroup)
+                std::set<int> availableSitesInNewTile = {0, 1, 2, 3, 4, 5, 6, 7};
+                bool isfinished = false;
+                auto neighbors = getNeighborTile(std::get<0>(newLocation), std::get<1>(newLocation)); // 找下一个tile位置
+                while (!isfinished)
                 {
-                    instance->setLocation(std::make_tuple(std::get<0>(newLocation), std::get<1>(newLocation), siteIndex));
-                    int instID = instance->getInstID();
-                    if (tilePtr->addInstance(instID, siteIndex, instance->getModelName(), false))
+                    bool placed = false; // 标记是否成功放置
+
+                    int neighborX = std::get<0>(neighbors);
+                    int neighborY = std::get<1>(neighbors);
+                    tilePtr = chip.getTile(neighborX, neighborY);
+
+                    // 检查相邻 tile 是否有效并且有足够的资源
+                    if (tilePtr && lutGroupSet.size() <= tilePtr->getLUTCount() && tilePtr->getTileTypes().count("PLB"))
                     {
-                        instance->setLUTInitial(true);
+                        isfinished = true;
+                        // 获取 "LUT" 类型的 slotArr 指针
+                        slotArr *slots = tilePtr->getInstanceByType("LUT");
+                        if (slots != nullptr)
+                        {
+                            // 移除已使用的编号
+                            for (size_t i = 0; i < slots->size(); ++i)
+                            {
+                                if (!(*slots)[i]->getOptimizedInstances().empty())
+                                {
+                                    availableSitesInNewTile.erase(i);
+                                }
+                            }
+                        }
+                        for (const auto &lutGroup : lutGroupSet)
+                        {
+                            for (Instance *instance : lutGroup)
+                            {
+                                int siteIndex = *availableSitesInNewTile.begin();
+                                instance->setLocation(std::make_tuple(neighborX, neighborY, siteIndex));
+                                int instID = instance->getInstID();
+                                if (tilePtr->addInstance(instID, siteIndex, instance->getModelName(), false))
+                                {
+                                    instance->setLUTInitial(true);
+                                }
+                                else
+                                {
+                                    std::cout << "Error: Failed to add non-fixed instance " << instance->getInstanceName()
+                                              << " to tile at " << std::get<0>(newLocation) << ", "
+                                              << std::get<1>(newLocation) << std::endl;
+                                    return false;
+                                }
+                            }
+                        }
+                    }
+                    else
+                    {
+                        neighbors = getNeighborTile(neighborX, neighborY);
+                        int dummy = 0;
+                    }
+                }
+            }
+        }
+        if (lutGroupNum == 1)
+        {
+            Instance *oneLUT = *oneLUTGroup.begin();
+            // tilePtr有定义且有足够的资源放下lutGroupSet
+            int x = std::get<0>(newLocation);
+            int y = std::get<1>(newLocation);
+            int siteIndex = -1;
+            if (tilePtr && isValid(false, x, y, siteIndex, oneLUT))
+            {
+                for (const auto &lutGroup : lutGroupSet)
+                {
+                    oneLUT->setLocation(std::make_tuple(x, y, siteIndex));
+                    int instID = oneLUT->getInstID();
+                    if (tilePtr->addInstance(instID, siteIndex, oneLUT->getModelName(), false))
+                    {
+                        oneLUT->setLUTInitial(true);
                         availableSites.erase(siteIndex);
                     }
                     else
                     {
-                        std::cout << "Error: Failed to add non-fixed instance " << instance->getInstanceName()
+                        std::cout << "Error: Failed to add non-fixed instance " << oneLUT->getInstanceName()
                                   << " to tile at " << std::get<0>(newLocation) << ", "
                                   << std::get<1>(newLocation) << std::endl;
                         return false;
                     }
                 }
             }
-        }
-        else
-        {
-            std::set<int> availableSitesInNewTile = {0, 1, 2, 3, 4, 5, 6, 7};
-            bool isfinished = false;
-            auto neighbors = getNeighborTile(std::get<0>(newLocation), std::get<1>(newLocation)); // 找下一个tile位置
-            while (!isfinished)
+            else
             {
-                bool placed = false; // 标记是否成功放置
-
-                int neighborX = std::get<0>(neighbors);
-                int neighborY = std::get<1>(neighbors);
-                tilePtr = chip.getTile(neighborX, neighborY);
-
-                // 检查相邻 tile 是否有效并且有足够的资源
-                if (tilePtr && lutGroupSet.size() <= tilePtr->getLUTCount() && tilePtr->getTileTypes().count("PLB"))
+                bool isfinished = false;
+                auto neighbors = getNeighborTile(std::get<0>(newLocation), std::get<1>(newLocation)); // 找下一个tile位置
+                while (!isfinished)
                 {
-                    isfinished = true;
-                    // 获取 "LUT" 类型的 slotArr 指针
-                    slotArr *slots = tilePtr->getInstanceByType("LUT");
-                    if (slots != nullptr)
+                    bool placed = false; // 标记是否成功放置
+
+                    int neighborX = std::get<0>(neighbors);
+                    int neighborY = std::get<1>(neighbors);
+                    tilePtr = chip.getTile(neighborX, neighborY);
+
+                    // 检查相邻 tile 是否有效并且有足够的资源
+                    if (tilePtr && isValid(false, neighborX, neighborY, siteIndex, oneLUT) && tilePtr->getTileTypes().count("PLB"))
                     {
-                        // 移除已使用的编号
-                        for (size_t i = 0; i < slots->size(); ++i)
+                        isfinished = true;
+                        oneLUT->setLocation(std::make_tuple(neighborX, neighborY, siteIndex));
+                        int instID = oneLUT->getInstID();
+                        if (tilePtr->addInstance(instID, siteIndex, oneLUT->getModelName(), false))
                         {
-                            if (!(*slots)[i]->getOptimizedInstances().empty())
-                            {
-                                availableSitesInNewTile.erase(i);
-                            }
+                            oneLUT->setLUTInitial(true);
+                        }
+                        else
+                        {
+                            std::cout << "Error: Failed to add non-fixed instance " << oneLUT->getInstanceName()
+                                      << " to tile at " << std::get<0>(newLocation) << ", "
+                                      << std::get<1>(newLocation) << std::endl;
+                            return false;
                         }
                     }
-                    for (const auto &lutGroup : lutGroupSet)
+                    else
                     {
-                        for (Instance *instance : lutGroup)
-                        {
-                            int siteIndex = *availableSitesInNewTile.begin();
-                            instance->setLocation(std::make_tuple(neighborX, neighborY, siteIndex));
-                            int instID = instance->getInstID();
-                            if (tilePtr->addInstance(instID, siteIndex, instance->getModelName(), false))
-                            {
-                                instance->setLUTInitial(true);
-                            }
-                            else
-                            {
-                                std::cout << "Error: Failed to add non-fixed instance " << instance->getInstanceName()
-                                          << " to tile at " << std::get<0>(newLocation) << ", "
-                                          << std::get<1>(newLocation) << std::endl;
-                                return false;
-                            }
-                        }
+                        neighbors = getNeighborTile(neighborX, neighborY);
+                        int dummy = 0;
                     }
-                }
-                else
-                {
-                    neighbors = getNeighborTile(neighborX, neighborY);
-                    int dummy = 0;
                 }
             }
         }
@@ -1861,67 +1939,89 @@ bool updateInstancesToTiles()
 // 比对PLB中的LUT的信息
 void printPLBInformation()
 {
-    // 遍历每个 PLB 组
-    // 检测数据
-    int totalLUTCOUNT = 0;
-    for (const auto &instpair : glbInstMap)
+    if (false)
     {
-        auto inst = instpair.second;
-        if (inst->getModelName().substr(0, 3) != "LUT")
+        // 遍历每个 PLB 组
+        // 检测数据
+        int totalLUTCOUNT = 0;
+        for (const auto &instpair : glbInstMap)
         {
-            continue;
+            auto inst = instpair.second;
+            if (inst->getModelName().substr(0, 3) != "LUT")
+            {
+                continue;
+            }
+            if (inst->getPLBGroupID() != -1)
+            {
+                totalLUTCOUNT++;
+            }
         }
-        if (inst->getPLBGroupID() != -1)
+        std::cout << "globalinstancemap 中 plbGroups 检测到的 LUT的数目 : " << totalLUTCOUNT << std::endl;
+        int totalLUTCount = 0;
+        for (const auto &plbPair : plbGroups)
         {
-            totalLUTCOUNT++;
+            if (plbPair.first == 922)
+            {
+                int dummy = 0;
+            }
+
+            const auto &lutGroupSet = plbPair.second;
+            int a = 0;
+            // 遍历每个 LUT 组
+            for (const auto &lutGroup : lutGroupSet)
+            {
+                totalLUTCount += lutGroup.size(); // 计算当前 LUT 组的大小
+                a += lutGroup.size();
+            }
+            // std::cout << a << std::endl;
         }
+        std::cout << "实际的 plbGroups 中LUT的数目 : " << totalLUTCount << std::endl;
+        std::cout << "plbGroups数目 : " << plbGroups.size() << std::endl;
     }
-    std::cout << "globalinstancemap 中 plbGroups 检测到的 LUT的数目 : " << totalLUTCOUNT << std::endl;
-    int totalLUTCount = 0;
-    for (const auto &plbPair : plbGroups)
-    {
-        if (plbPair.first == 922)
-        {
-            int dummy = 0;
-        }
-        
-        const auto &lutGroupSet = plbPair.second;
-        int a = 0;
-        // 遍历每个 LUT 组
-        for (const auto &lutGroup : lutGroupSet)
-        {
-            totalLUTCount += lutGroup.size(); // 计算当前 LUT 组的大小
-            a += lutGroup.size();
-        }
-        // std::cout << a << std::endl;
-    }
-    std::cout << "实际的 plbGroups 中LUT的数目 : " << totalLUTCount << std::endl;
-    std::cout << "plbGroups数目 : " << plbGroups.size() << std::endl;
 }
 
 // 打印instance信息
 void printInstanceInformation()
 {
-    int totalFixedInstance = 0;
-    int totalSeqMatchedInstance = 0;
-    // 遍历 glbInstMap 组
-    for (auto &inst : glbInstMap)
+    if (true)
     {
-        Instance *instance = inst.second;
-        if (instance->isFixed())
+        int totalLUTmatchedNum = 0;
+        for (auto &lutGroup : lutGroups)
         {
-            totalFixedInstance++;
+            
+            if (lutGroup.second.size() == 2)
+            {
+                totalLUTmatchedNum++;
+            }
         }
-        if (instance->getSEQID() != -1)
-        {
-            totalSeqMatchedInstance++;
-        }
+        std::cout << lineBreaker << std::endl;
+        std::cout << "匹配的LUT组数目 : " << totalLUTmatchedNum << std::endl;
+        std::cout << lineBreaker << std::endl;
     }
-    std::cout << lineBreaker << std::endl;
-    std::cout << "固定的Instance数目 : " << totalFixedInstance << std::endl;
-    std::cout << "匹配完成的Seq数目 : " << totalSeqMatchedInstance << std::endl;
-    std::cout << "Seq组的数目 : " << seqPlacementMap.size() << std::endl;
-    std::cout << lineBreaker << std::endl;
+    
+    if (false)
+    {
+        int totalFixedInstance = 0;
+        int totalSeqMatchedInstance = 0;
+        // 遍历 glbInstMap 组
+        for (auto &inst : glbInstMap)
+        {
+            Instance *instance = inst.second;
+            if (instance->isFixed())
+            {
+                totalFixedInstance++;
+            }
+            if (instance->getSEQID() != -1)
+            {
+                totalSeqMatchedInstance++;
+            }
+        }
+        std::cout << lineBreaker << std::endl;
+        std::cout << "固定的Instance数目 : " << totalFixedInstance << std::endl;
+        std::cout << "匹配完成的Seq数目 : " << totalSeqMatchedInstance << std::endl;
+        std::cout << "Seq组的数目 : " << seqPlacementMap.size() << std::endl;
+        std::cout << lineBreaker << std::endl;
+    }
 }
 
 bool compareOuterSets(const std::set<std::set<Instance *>> &a, const std::set<std::set<Instance *>> &b)
@@ -1937,14 +2037,74 @@ void sortPLBGrouptList(std::vector<std::set<std::set<Instance *>>> &nonFixedPLBG
 // 获取上一个或下一个相邻的 Tile 位置，返回单个位置
 std::tuple<int, int> getNeighborTile(int x, int y)
 {
-    // 检查 y 是否在有效范围内，返回下一个位置
-    if (y + 1 <= 299) // 确保不超出边界
+    // 保存原始输入以便必要时恢复
+    int originalX = x;
+    int originalY = y;
+
+    // 尝试 y + 1
+    if (y + 1 <= 299)
     {
         return std::make_tuple(x, y + 1);
     }
     else
     {
-        // 如果超出边界，可以返回一个默认值或处理方式
-        return std::make_tuple(x + 1, y); // 或者返回 std::make_tuple(-1, -1) 表示无效位置
+        // y 超出范围，将 y 设为 0 并尝试 x + 1
+        y = 0;
+        if (x + 1 <= 149)
+        {
+            return std::make_tuple(x + 1, y);
+        }
+        else
+        {
+            // x + 1 也超出范围，恢复到原位置并尝试 y - 1
+            x = originalX;
+            y = originalY;
+
+            if (y - 1 >= 0)
+            {
+                return std::make_tuple(x, y - 1);
+            }
+            else
+            {
+                // y - 1 超出范围，尝试 x - 1
+                y = 299;
+                if (x - 1 >= 0)
+                {
+                    return std::make_tuple(x - 1, y);
+                }
+                else
+                {
+                    // x - 1 超出范围，返回无效位置
+                    return std::make_tuple(-1, -1);
+                }
+            }
+        }
     }
+}
+
+int calculateTwoInstanceWireLength(Instance *inst1, Instance *inst2, bool isBaseLine)
+{
+    int totalWireLength = 0;
+    if (isBaseLine)
+    {
+        std::tuple<int, int, int> loc1 = inst1->getBaseLocation();
+        int x1 = std::get<0>(loc1);
+        int y1 = std::get<0>(loc1);
+        std::tuple<int, int, int> loc2 = inst1->getBaseLocation();
+        int x2 = std::get<0>(loc2);
+        int y2 = std::get<0>(loc2);
+        totalWireLength = abs(x1 - x2) + abs(y1 - y2);
+    }
+    else
+    {
+        std::tuple<int, int, int> loc1 = inst1->getLocation();
+        int x1 = std::get<0>(loc1);
+        int y1 = std::get<0>(loc1);
+        std::tuple<int, int, int> loc2 = inst1->getLocation();
+        int x2 = std::get<0>(loc2);
+        int y2 = std::get<0>(loc2);
+        totalWireLength = abs(x1 - x2) + abs(y1 - y2);
+    }
+
+    return totalWireLength;
 }
