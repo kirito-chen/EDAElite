@@ -204,12 +204,24 @@ int selectNetId(std::vector<std::pair<int,float>>& fitnessVec){
     int netId = fitnessVec[index].first;
 
     //跳过bigNet
-    if(!glbBigNet.empty()){
+    if(glbBigNetPinNum > 0){
         while(glbBigNet.count(netId)){
             a = generate_random_int(0, n - 1); // 范围在 0 到 n - 1
             b = generate_random_int(0, n - 1);
             index = std::min(a, b);
             netId = fitnessVec[index].first;
+        }
+    }
+    return netId;
+}
+//随机选取一个netId
+int selectNetIdRandom(){ 
+    int netId = generate_random_int(0, glbNetMap.size() - 1);
+
+    //跳过bigNet
+    if(glbBigNetPinNum > 0){
+        while(glbBigNet.count(netId)){
+            netId = generate_random_int(0, glbNetMap.size() - 1);
         }
     }
     return netId;
@@ -585,25 +597,25 @@ int arbsa(bool isBaseline, std::string nodesFile, const std::chrono::time_point<
 
     /********** 预处理 *********/ 
     // 构造 fitness 优先级列表 初始化 rangeDesired  
-    std::vector<std::pair<int,float>> fitnessVec; // 第一个是netId，第二个是适应度fitness, 适应度越小表明越需要移动。后续会按照fitness升序排列
+    // std::vector<std::pair<int,float>> fitnessVec; // 第一个是netId，第二个是适应度fitness, 适应度越小表明越需要移动。后续会按照fitness升序排列
     std::map<int, int> rangeDesiredMap; // 第一个是netId，第二个是外框矩形的平均跨度，即半周线长的一半
     calculrangeMap(isBaseline, rangeDesiredMap);  
     //构造fitnessVec
-    for(auto it : glbNetMap){
-        Net *net = it.second;
-        fitnessVec.emplace_back(std::make_pair(net->getId(), 0));
-    }
-    std::map<int, int> rangeActualMap(rangeDesiredMap); // 第一个是netId，第二个是当前实际的外框矩形的平均跨度，即半周线长的一半
+    // for(auto it : glbNetMap){
+    //     Net *net = it.second;
+    //     fitnessVec.emplace_back(std::make_pair(net->getId(), 0));
+    // }
+    // std::map<int, int> rangeActualMap(rangeDesiredMap); // 第一个是netId，第二个是当前实际的外框矩形的平均跨度，即半周线长的一半
     
     // 计算 fitness 并 排序
-    calculFitness(fitnessVec, rangeDesiredMap, rangeActualMap);
-    sortedFitness(fitnessVec);
+    // calculFitness(fitnessVec, rangeDesiredMap, rangeActualMap);
+    // sortedFitness(fitnessVec);
 
     std::vector<int> sigmaVecInit;
     //根据标准差设置初始温度
     for(int i = 0; i < 50; i++){
         //计算50次步骤取方差
-        int netId = selectNetId(fitnessVec);
+        int netId = selectNetIdRandom();
         Net* net = glbNetMap[netId];
         Instance* inst = selectInst(net);
         if(inst == nullptr){
@@ -758,12 +770,12 @@ int arbsa(bool isBaseline, std::string nodesFile, const std::chrono::time_point<
                 hitBigNet = 0;
             }
             /*********** 更新range与fitness **************/
-            if(hitNet > hitNetLimit){
-                calculrangeMap(isBaseline, rangeActualMap);
-                calculFitness(fitnessVec, rangeDesiredMap, rangeActualMap);
-                sortedFitness(fitnessVec);
-                hitNet = 0;
-            }
+            // if(hitNet > hitNetLimit){
+            //     calculrangeMap(isBaseline, rangeActualMap);
+            //     calculFitness(fitnessVec, rangeDesiredMap, rangeActualMap);
+            //     sortedFitness(fitnessVec);
+            //     hitNet = 0;
+            // }
             /********************************************/
 
             if(Iter % 100 == 0) {
@@ -772,7 +784,7 @@ int arbsa(bool isBaseline, std::string nodesFile, const std::chrono::time_point<
             // std::cout<<"[INFO] T:"<< std::scientific << std::setprecision(3) <<T <<" iter:"<<std::setw(4)<<Iter<<" alpha:"<<std::fixed<<std::setprecision(2)<<alpha<<" cost:"<<std::setw(7)<<cost<<std::endl;
             Iter++;
             // 根据fitness列表选择一个net  
-            int netId = selectNetId(fitnessVec);
+            int netId = selectNetIdRandom();
             #ifdef DEBUG
                 std::cout<<"DEBUG-netId:"<<netId<<std::endl;
             #endif
@@ -892,12 +904,12 @@ int arbsa(bool isBaseline, std::string nodesFile, const std::chrono::time_point<
                 }
             }
             // counterNet 计数+1
-            counterNet += 1;
-            // 当计数等于一个限制时，更新rangeActual 到 rangeDesired
-            if(counterNet == counterNetLimit){
-                rangeDesiredMap = rangeActualMap;
-                counterNet = 0;
-            }
+            // counterNet += 1;
+            // // 当计数等于一个限制时，更新rangeActual 到 rangeDesired
+            // if(counterNet == counterNetLimit){
+            //     rangeDesiredMap = rangeActualMap;
+            //     counterNet = 0;
+            // }
         }
         if(timeup) break; //时间快到了，结束
         
@@ -917,7 +929,7 @@ int arbsa(bool isBaseline, std::string nodesFile, const std::chrono::time_point<
         // Iter = 0
         Iter = 0;
         // 排序fitness列表
-        sortedFitness(fitnessVec);
+        // sortedFitness(fitnessVec);
     }
     
     //记录截止次数
@@ -932,7 +944,7 @@ int arbsa(bool isBaseline, std::string nodesFile, const std::chrono::time_point<
     // 输出运行时间（单位为秒）
     std::cout << "SA runtime: " << duration.count() << " s" << std::endl;
     //计算平均每次运行时间
-    std::cout << "runtime/exterLimit:" << duration.count() / (exterLimit-1) <<" runtime/iter:" << duration.count() / ((exterLimit-1)*2000)<< std::endl;
+    // std::cout << "runtime/exterLimit:" << duration.count() / (exterLimit-1) <<" runtime/iter:" << duration.count() / ((exterLimit-1)*2000)<< std::endl;
 
     return 0;
 }
