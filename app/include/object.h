@@ -302,12 +302,14 @@ class Instance
     std::vector<int> movableRegion; // wbx，inst的可移动区域，由inst的net最小外包矩形给出
     int matchedLUTID;               // 用于存储与当前LUT匹配的LUT实例ID
 
-    bool isMatch;
+    bool mapMatched; // 用于检查 initialGlbPackInstMap 
     int plbGroupID;
     int lutSetID; // 指定LUT的LUT组编号
 
     bool lutInitialed; // 这个是用来确保LUT类型的instance在updateInstancesToTiles只被调整一次位置，默认为false
     int seqGroupID;
+
+    std::vector<int> instMapIDVec; // 这里存储的是粗化之后用于映射的instID，LUT和SEQ共用
 
 public:
     Instance();
@@ -315,7 +317,8 @@ public:
 
     void modifyFixed(bool _fix) { fixed = _fix; }
 
-    bool isMatched() { return isMatch; }
+    bool isMapMatched() { return mapMatched; }
+    void setMapMatched(bool _isMapMatched) { mapMatched = _isMapMatched; }
 
     // 添加 Getter 和 Setter 函数
     int getMatchedLUTID() const { return matchedLUTID; }
@@ -385,6 +388,9 @@ public:
         size_t underscorePos = instanceName.find('_');                                                        // 找到下划线的位置
         return (underscorePos != std::string::npos) ? std::stoi(instanceName.substr(underscorePos + 1)) : -1; // 提取并转换
     }
+
+    void addMapInstID(int _id) { instMapIDVec.push_back(_id); }
+    std::vector<int> getMapInstID() { return instMapIDVec; }
 };
 
 class Net

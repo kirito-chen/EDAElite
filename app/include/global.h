@@ -33,4 +33,5 @@ extern std::unordered_map<int, PLBPlacement> plbPlacementMap;
 // 全局SEQ映射
 extern std::unordered_map<int, SEQBankPlacement> seqPlacementMap;
 
-
+extern std::map<int, Instance*> glbPackInstMap;    // 存储打包后的全局InstMap
+void initialGlbPackInstMap();

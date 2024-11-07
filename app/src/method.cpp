@@ -503,6 +503,7 @@ void matchLUTPairsThread(std::map<int, Instance *> &glbInstMap, std::vector<int>
                          std::unordered_map<int, std::unordered_set<int>> &lutNetMap,
                          std::unordered_map<int, std::unordered_set<int>> &netLUTMap, int start, int end)
 {
+    int wireLimit = 2; // 线长限制，默认为2
     while (start < end)
     {
         int bestMatchedLUTID = -1;
@@ -510,10 +511,11 @@ void matchLUTPairsThread(std::map<int, Instance *> &glbInstMap, std::vector<int>
 
         int currentLUTID = unmatchedLUTs[start];
         Instance *currentLUT = glbInstMap[currentLUTID];
+
         int inputPinNum = currentLUT->getUsedNumInpins();
         {
             std::lock_guard<std::mutex> lock(lutMutex);
-            if (matchedLUTs.find(currentLUTID) != matchedLUTs.end())
+            if (matchedLUTs.find(currentLUTID) != matchedLUTs.end() && currentLUT->getMatchedLUTID() != -1)
             {
                 ++start;
                 continue;
@@ -535,7 +537,7 @@ void matchLUTPairsThread(std::map<int, Instance *> &glbInstMap, std::vector<int>
 
                 // 距离限制判断
                 int twoinstwirelength = calculateTwoInstanceWireLength(currentLUT, otherLUT, false);
-                if (twoinstwirelength >= 10)
+                if (twoinstwirelength >= wireLimit)
                 {
                     continue;
                 }
@@ -563,7 +565,8 @@ void matchLUTPairsThread(std::map<int, Instance *> &glbInstMap, std::vector<int>
                 std::unordered_set<int> unionPins = unionSets(currentLUTNets, otherLUTNets);
                 int totalInpins = unionPins.size();
 
-                if (sharedNetCount > maxSharedNets && totalInpins == inputPinNum && currentLUTNets.size() == otherLUTNets.size())
+                // if (sharedNetCount > maxSharedNets && totalInpins == inputPinNum && currentLUTNets.size() == otherLUTNets.size())
+                if (sharedNetCount > maxSharedNets && totalInpins <= 6)
                 {
                     maxSharedNets = sharedNetCount;
                     bestMatchedLUTID = otherLUTID;
@@ -580,6 +583,7 @@ void matchLUTPairsThread(std::map<int, Instance *> &glbInstMap, std::vector<int>
                 matchedLUTs.insert(currentLUTID);
                 matchedLUTs.insert(bestMatchedLUTID);
 
+                // 添加matchedID
                 currentLUT->setMatchedLUTID(bestMatchedLUTID);
                 glbInstMap[bestMatchedLUTID]->setMatchedLUTID(currentLUTID);
 
@@ -602,6 +606,7 @@ void matchLUTPairs(std::map<int, Instance *> &glbInstMap, bool isLutPack, bool i
     std::vector<int> unmatchedLUTs;                             // 未匹配的LUT集合
 
     // 构建 LUT 和 Net 的映射
+
     for (const auto &instPair : glbInstMap)
     {
         int instID = instPair.first;
@@ -668,6 +673,7 @@ void matchLUTPairs(std::map<int, Instance *> &glbInstMap, bool isLutPack, bool i
         initializeSEQPlacementMap(glbInstMap);
         updateSEQLocations(seqPlacementMap);
     }
+    initialGlbPackInstMap(); // 初始化 glbPackInstMap
     updateInstancesToTiles(isSeqPack);
 }
 
@@ -1295,6 +1301,7 @@ void initializePLBPlacementMap(const std::map<int, std::set<std::set<Instance *>
 void initializeSEQPlacementMap(const std::map<int, Instance *> &glbInstMap)
 {
     int bankID = 0;
+    int wireLimit = 1; // 默认为1
 
     for (const auto &instPair : glbInstMap)
     {
@@ -1317,11 +1324,10 @@ void initializeSEQPlacementMap(const std::map<int, Instance *> &glbInstMap)
             int y_bank = std::get<1>(bank.getLocation());
             int twoInstWireLength = abs(x_inst - x_bank) + abs(y_inst - y_bank);
 
-            if (twoInstWireLength >= 2)
+            if (twoInstWireLength >= wireLimit)
             {
                 continue;
             }
-            
 
             // 判断是否符合 bank 的约束：检查连接情况并确保数量限制在 8 个以内
             if (bank.getSEQCount() < 8 && bank.addInstance(inst))
@@ -1784,6 +1790,12 @@ bool updateInstancesToTiles(bool isSeqPack)
             // tilePtr有定义且有足够的资源放下lutGroupSet
             int x = std::get<0>(newLocation);
             int y = std::get<1>(newLocation);
+            bool isLeft = true;
+            if (x < 75)
+            {
+                isLeft = false;
+            }
+            
             int siteIndex = -1;
             if (tilePtr && isValid(false, x, y, siteIndex, oneLUT))
             {
@@ -1808,7 +1820,7 @@ bool updateInstancesToTiles(bool isSeqPack)
             else
             {
                 bool isfinished = false;
-                auto neighbors = getNeighborTile(std::get<0>(newLocation), std::get<1>(newLocation)); // 找下一个tile位置
+                auto neighbors = getNeighborTile(std::get<0>(newLocation), std::get<1>(newLocation), isLeft); // 找下一个tile位置
                 while (!isfinished)
                 {
                     bool placed = false; // 标记是否成功放置
@@ -1967,6 +1979,9 @@ void printInstanceInformation()
         }
         std::cout << lineBreaker << std::endl;
         std::cout << "匹配的LUT组数目 : " << totalLUTmatchedNum << std::endl;
+        std::cout << "LUT组数目 : " << lutGroups.size() << std::endl;
+        std::cout << "seq组的数目 : " << seqPlacementMap.size() << std::endl;
+        std::cout << "glbPackInstMap 数目 : " << glbPackInstMap.size() << std::endl;
         std::cout << lineBreaker << std::endl;
     }
 
@@ -2011,9 +2026,9 @@ std::tuple<int, int> getNeighborTile(int x, int y, bool isLeft)
     if (isLeft)
     {
         // 尝试向左移动
-        if (y - 1 >= 0)
+        if (y + 1 <= 299)
         {
-            return std::make_tuple(x, y - 1);
+            return std::make_tuple(x, y + 1);
         }
         else
         {
@@ -2036,7 +2051,7 @@ std::tuple<int, int> getNeighborTile(int x, int y, bool isLeft)
             // y 超出范围，重置 y 为 0 并尝试 x + 1
             if (x + 1 <= 149)
             {
-                return std::make_tuple(x + 1, 0);
+                return std::make_tuple(x + 1, y);
             }
         }
     }
@@ -2102,4 +2117,66 @@ int calculateTwoInstanceWireLength(Instance *inst1, Instance *inst2, bool isBase
     }
 
     return totalWireLength;
+}
+
+// 初始化 glbPackInstMap , 在完成LUT与SEQ的打包之后
+void initialGlbPackInstMap()
+{
+    for (auto &entry : glbInstMap)
+    {
+        int instID = entry.first;
+        Instance *instance = entry.second;
+
+        // 对 LUT 类型的 instance 处理
+        if (instance->getModelName().substr(0, 3) == "LUT" && !instance->isMapMatched())
+        {
+            glbPackInstMap.insert(std::make_pair(glbPackInstMap.size(), instance));
+            instance->setMapMatched(true);
+            instance->addMapInstID(instID);
+            int matchedID = instance->getMatchedLUTID();
+            if (matchedID != -1)
+            {
+                instance->addMapInstID(matchedID);
+                glbInstMap[matchedID]->setMapMatched(true);
+                // Instance *tmp = glbInstMap[matchedID];
+                // int a = 0;
+            }
+            continue;
+        }
+        if (instance->getModelName().substr(0, 3) == "SEQ" && !instance->isMapMatched())
+        {
+            glbPackInstMap.insert(std::make_pair(glbPackInstMap.size(), instance));
+            // instance->setMapMatched(true);
+            // instance->addMapInstID(instID);
+
+            int seqGroupID = instance->getSEQID();
+            if (!seqPlacementMap.empty())
+            {
+                std::vector<Instance *> seqVec = seqPlacementMap[seqGroupID].getSEQInstances();
+                for (auto &seq_instance : seqVec)
+                {
+                    // 检查指针是否为空，以防止空指针访问
+                    if (seq_instance)
+                    {
+                        // 对 instance 进行所需的修改
+                        seq_instance->setMapMatched(true);
+                        instance->addMapInstID(seq_instance->getInstID());
+                    }
+                }
+                continue;
+            }
+            else
+            {
+                instance->setMapMatched(true);
+                instance->addMapInstID(instance->getInstID());
+            }
+        }
+        if (!instance->isMapMatched())
+        {
+
+            glbPackInstMap.insert(std::make_pair(glbPackInstMap.size(), instance));
+            instance->setMapMatched(true);
+            instance->addMapInstID(instID);
+        }
+    }
 }

@@ -86,11 +86,13 @@ int main(int argc, char *argv[])
     bool isBaseline = false;
     // readOutputNetlist(nodesFile);
 
+    reportDesignStatistics();
+
     readOutputNetlist(outFile);
     legalCheck();
     reportWirelength();
 
-    matchLUTPairs(glbInstMap, true, true);
+    matchLUTPairs(glbInstMap, true, true);  // 打包代码
     printInstanceInformation();
     //生成结果
     // generateOutputFile(isBaseline, outFile);

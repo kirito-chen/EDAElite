@@ -14,4 +14,5 @@ std::map<int, std::set<std::set<Instance*>>> plbGroups;
 std::unordered_map<int, PLBPlacement> plbPlacementMap;
 std::unordered_map<int, SEQBankPlacement> seqPlacementMap;
 
+std::map<int, Instance*> glbPackInstMap;    // 存储打包后的全局InstMap
 

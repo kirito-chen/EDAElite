@@ -1459,7 +1459,7 @@ Instance::Instance()
   setLocation(std::make_tuple(-1, -1, -1));
   setBaseLocation(std::make_tuple(-1, -1, -1));
   movableRegion.assign(4, -1);
-  isMatch = false;
+  mapMatched = false;
   matchedLUTID = -1;
   plbGroupID = -1;
   lutInitialed = false;
