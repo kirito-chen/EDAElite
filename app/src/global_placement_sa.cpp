@@ -117,7 +117,7 @@ void global_placement_sa(bool isBaseline)
 
     // initializePLBGroupLocations(plbPlacementMap);
     // initializeSEQGroupLocations(seqPlacementMap);
-    updateInstancesToTiles();
+    updateInstancesToTiles(false);
     // 模拟退火主循环
     while (T > threshold)
     {

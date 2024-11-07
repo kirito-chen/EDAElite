@@ -34,8 +34,6 @@
 #define MAX_TILE_PIN_INPUT_COUNT 112.0 // 48 LUT input pins + 16 SEQ input pins (D) + 48 SEQ ctrl pins (CE CLK SR)
 #define MAX_TILE_PIN_OUTPUT_COUNT 32.0 // 16 LUT output pins + 16 SEQ output pins
 
-
-
 enum PinProp
 {
     PIN_PROP_NONE,
@@ -46,6 +44,7 @@ enum PinProp
 
 class Instance;
 class Net;
+class SEQBankPlacement;
 class Slot
 {
 private:
@@ -85,11 +84,12 @@ struct LUTUsage
     std::set<int> remainingPins; // 使用该引脚的netID
 };
 
-class Tile {
-    private:
-        int col;
-        int row;
-        std::set<std::string> tileTypes;  //cjq 包含PLB DSP RAMA IOA等
+class Tile
+{
+private:
+    int col;
+    int row;
+    std::set<std::string> tileTypes; // cjq 包含PLB DSP RAMA IOA等
 
     // container to record instances belone to this tile
     std::map<std::string, slotArr> instanceMap;
@@ -158,10 +158,10 @@ public:
     int findOffset(std::string instTypes, Instance *inst, bool isBaseline);
     int getLUTCount() const;
 
-    std::vector<std::set<Instance*>> getFixedOptimizedLUTGroups() const;
+    std::vector<std::set<Instance *>> getFixedOptimizedLUTGroups() const;
     std::vector<int> getFixedOptimizedDRAMGroups() const;
+    bool addSeqBank(SEQBankPlacement seqBank);
 
-    
     std::vector<int> getSeqInstanceBankNum();
 };
 
@@ -304,7 +304,7 @@ class Instance
 
     bool isMatch;
     int plbGroupID;
-    int lutSetID;       //指定LUT的LUT组编号
+    int lutSetID; // 指定LUT的LUT组编号
 
     bool lutInitialed; // 这个是用来确保LUT类型的instance在updateInstancesToTiles只被调整一次位置，默认为false
     int seqGroupID;
@@ -330,7 +330,7 @@ public:
 
     bool isFixed() const { return fixed; }
     void setFixed(bool value) { fixed = value; }
-    
+
     bool isLUTInitial() const { return lutInitialed; }
     void setLUTInitial(bool _isLUTInitial) { lutInitialed = _isLUTInitial; }
 
@@ -519,7 +519,7 @@ public:
     }
 
     // 构造函数
-    SEQBankPlacement(int id) : bankID(id), isFixed(false) {}
+    SEQBankPlacement(int id) : bankID(id), isFixed(false) { location = std::make_tuple<int, int>(-1, -1); }
 
     // 设置和获取Bank的ID
     int getBankID() const { return bankID; }

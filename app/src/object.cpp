@@ -74,10 +74,10 @@ bool Tile::addInstance(int instID, int offset, std::string modelType, const bool
   return true;
 }
 
-// 获取当前instance的seq占用bank的情况
+// 获取当前Tile的seq占用bank的情况
 std::vector<int> Tile::getSeqInstanceBankNum()
 {
-  std::vector<int> seqBankNum;
+  std::vector<int> seqBankNum = {1, 1};
   bool zeroBankFlag = false;
   bool oneBankFlag = false;
 
@@ -109,13 +109,103 @@ std::vector<int> Tile::getSeqInstanceBankNum()
   }
   if (zeroBankFlag)
   {
-    seqBankNum.push_back(0);
+    seqBankNum[0] = 0;
   }
   if (oneBankFlag)
   {
-    seqBankNum.push_back(1);
+    seqBankNum[1] = 0;
   }
   return seqBankNum; // 返回所有 SEQ 实例在各个 Bank 的占用情况
+}
+
+bool Tile::addSeqBank(SEQBankPlacement seqBank)
+{
+  bool isOK = false; // 是否放置成功
+  std::vector<int> seqBankNum = {1, 1};
+  bool zeroBankFlag = true;
+  bool oneBankFlag = true;
+
+  // 遍历实例映射，根据类型筛选出 SEQ 实例
+  for (const auto &entry : instanceMap)
+  {
+    const std::string &type = entry.first;
+    const slotArr &slots = entry.second;
+
+    if (type.substr(0, 3) == "SEQ") // 只处理 SEQ 类型的实例
+    {
+      // 遍历每个槽位
+      for (size_t i = 0; i < slots.size(); ++i)
+      {
+        const auto &optimizedInstances = slots[i]->getOptimizedInstances();
+
+        // 如果该槽位有实例且i属于8-15
+        if (!optimizedInstances.empty() && i > 7)
+        {
+          oneBankFlag = false;
+        }
+        // 如果该槽位有实例且i属于0-7
+        if (!optimizedInstances.empty() && i <= 7)
+        {
+          zeroBankFlag = false;
+        }
+      }
+    }
+  }
+  if (zeroBankFlag)
+  {
+    // 遍历 bank 中的 SEQ 实例并进行放置
+    for (Instance *seqInstance : seqBank.getSEQInstances()) // 假设 getInstances() 返回 SEQ 实例的集合
+    {
+      auto newLocation = seqInstance->getLocation();
+      int siteIndex = std::get<2>(newLocation); // 获取坐标中的 siteIndex
+
+      // 尝试将 SEQ 实例放置到 Tile 中
+      int instID = seqInstance->getInstID();
+
+      if (!addInstance(instID, siteIndex, seqInstance->getModelName(), false))
+      {
+        std::cout << "Error: Failed to add SEQ instance " << seqInstance->getInstanceName()
+                  << " to tile at (" << col << ", " << row << ")." << std::endl;
+        return false; // 返回错误
+      }
+
+      std::tuple<int, int, int> seqLocation = {col, row, siteIndex};
+      seqInstance->setLocation(seqLocation);
+      seqInstance->setLUTInitial(true); // 标记为已放置
+    }
+    return true;
+  }
+  if (oneBankFlag)
+  {
+
+    // 遍历 bank 中的 SEQ 实例并进行放置
+    for (Instance *seqInstance : seqBank.getSEQInstances()) // 假设 getInstances() 返回 SEQ 实例的集合
+    {
+      auto newLocation = seqInstance->getLocation();
+      int siteIndex = std::get<2>(newLocation); // 获取坐标中的 siteIndex
+
+      // 尝试将 SEQ 实例放置到 Tile 中
+      int instID = seqInstance->getInstID();
+
+      if (!addInstance(instID, siteIndex + 8, seqInstance->getModelName(), false))
+      {
+        std::cout << "Error: Failed to add SEQ instance " << seqInstance->getInstanceName()
+                  << " to tile at (" << col << ", " << row << ")." << std::endl;
+        return false; // 返回错误
+      }
+
+      std::tuple<int, int, int> seqLocation = {col, row, siteIndex + 8};
+      seqInstance->setLocation(seqLocation);
+      seqInstance->setLUTInitial(true); // 标记为已放置
+    }
+    return true;
+  }
+
+  if (!zeroBankFlag && !oneBankFlag)
+  {
+    std::cout << "cannot add seqBank" << std::endl;
+    return false;
+  }
 }
 
 std::vector<std::set<Instance *>> Tile::getFixedOptimizedLUTGroups() const
@@ -1436,10 +1526,9 @@ int Instance::getUsedNumInpins() const
     if (inpins[i]->getNetID() != -1)
     {
       totalUsedInputPinNum++;
-    }    
+    }
   }
   return totalUsedInputPinNum;
-  
 }
 
 void Instance::createOutpins()

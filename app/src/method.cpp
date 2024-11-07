@@ -668,7 +668,7 @@ void matchLUTPairs(std::map<int, Instance *> &glbInstMap, bool isLutPack, bool i
         initializeSEQPlacementMap(glbInstMap);
         updateSEQLocations(seqPlacementMap);
     }
-    updateInstancesToTiles();
+    updateInstancesToTiles(isSeqPack);
 }
 
 // PLB打包，将LUT组打包成PLB组
@@ -1305,17 +1305,35 @@ void initializeSEQPlacementMap(const std::map<int, Instance *> &glbInstMap)
         {
             continue;
         }
-
         bool placed = false;
 
         // 尝试将当前 SEQ 实例放入现有的 bank
         for (auto &[_, bank] : seqPlacementMap)
         {
+
+            int x_inst = std::get<0>(inst->getLocation());
+            int y_inst = std::get<1>(inst->getLocation());
+            int x_bank = std::get<0>(bank.getLocation());
+            int y_bank = std::get<1>(bank.getLocation());
+            int twoInstWireLength = abs(x_inst - x_bank) + abs(y_inst - y_bank);
+
+            if (twoInstWireLength >= 2)
+            {
+                continue;
+            }
+            
+
             // 判断是否符合 bank 的约束：检查连接情况并确保数量限制在 8 个以内
             if (bank.getSEQCount() < 8 && bank.addInstance(inst))
             {
                 placed = true;
                 inst->setSEQID(bank.getBankID());
+
+                int xtmp = std::get<0>(bank.getLocation());
+                if (xtmp == -1)
+                {
+                    bank.setLocation(std::get<0>(inst->getLocation()), std::get<1>(inst->getLocation()));
+                }
                 break;
             }
         }
@@ -1334,6 +1352,12 @@ void initializeSEQPlacementMap(const std::map<int, Instance *> &glbInstMap)
             }
 
             newBank.addInstance(inst);
+            int xtmp = std::get<0>(newBank.getLocation());
+            if (xtmp == -1)
+            {
+                newBank.setLocation(std::get<0>(inst->getLocation()), std::get<1>(inst->getLocation()));
+            }
+
             inst->setSEQID(newBank.getBankID());
             seqPlacementMap[newBank.getBankID()] = newBank;
         }
@@ -1546,7 +1570,7 @@ void updateSEQLocations(std::unordered_map<int, SEQBankPlacement> &seqBankMap)
     }
 }
 
-bool updateInstancesToTiles()
+bool updateInstancesToTiles(bool isSeqPack)
 {
     // 清除所有 tile 中的 LUT 和 SEQ 实例
     for (int i = 0; i < chip.getNumCol(); i++)
@@ -1555,6 +1579,7 @@ bool updateInstancesToTiles()
         {
             Tile *tile = chip.getTile(i, j);
             tile->clearLUTOptimizedInstances(); // 清理 LUT 类型的实例
+            tile->clearSEQOptimizedInstances(); // 清理 LUT 类型的实例
         }
     }
 
@@ -1821,118 +1846,64 @@ bool updateInstancesToTiles()
     }
     //-------------------------------------------------------------------------------
 
-    // 将seq放置在tile上，并进行合法化处理
-    for (const auto &[bankID, bank] : seqPlacementMap)
+    if (isSeqPack)
     {
-        bool isSeqPlaceFinished = false;
-        // 获取 bank 的位置
-        auto [x, y] = bank.getLocation(); // 假设 getLocation() 返回 (x, y)
-        while (!isSeqPlaceFinished)
+        // 将seq放置在tile上，并进行合法化处理
+        for (const auto &[bankID, bank] : seqPlacementMap)
         {
+            bool isSeqPlaceFinished = false;
+            // 获取 bank 的位置
+            auto [x, y] = bank.getLocation(); // 假设 getLocation() 返回 (x, y)
+
             // 获取相应的 Tile
             Tile *tilePtr = chip.getTile(x, y);
-            if (tilePtr == nullptr)
-            {
-                std::cout << "Error: Tile at (" << x << ", " << y << ") is invalid." << std::endl;
-                continue; // 跳过无效的 Tile
-            }
-
-            // 检查 Tile 的类型是否为 PLB
+            std::vector<std::tuple<int, int>> neighbors;
+            // 如果tilePtr不是PLB，则生成邻域位置
             if (!tilePtr->getTileTypes().count("PLB"))
             {
-                std::cout << "Error: Tile at (" << x << ", " << y << ") is not a PLB." << std::endl;
-
-                auto neighbors = getNeighborTile(x, y); // 找下一个tile位置
-                x = std::get<0>(neighbors);
-                y = std::get<1>(neighbors);
-                continue; // 跳过非 PLB 类型的 Tile
+                neighbors = getNeighborTiles(x, y, 1); // 找下一个tile位置
             }
-
-            std::vector<int> seqBankNum = tilePtr->getSeqInstanceBankNum();
-
-            // 根据seqBankNum来判断能不能放置新的Seq组
-            if (seqBankNum.size() == 0)
+            if (tilePtr->addSeqBank(bank))
             {
-                // 遍历 bank 中的 SEQ 实例并进行放置
-                for (Instance *seqInstance : bank.getSEQInstances()) // 假设 getInstances() 返回 SEQ 实例的集合
-                {
-                    auto newLocation = seqInstance->getLocation();
-                    int siteIndex = std::get<2>(newLocation); // 获取坐标中的 siteIndex
-
-                    // 尝试将 SEQ 实例放置到 Tile 中
-                    int instID = seqInstance->getInstID();
-
-                    if (!tilePtr->addInstance(instID, siteIndex, seqInstance->getModelName(), false))
-                    {
-                        std::cout << "Error: Failed to add SEQ instance " << seqInstance->getInstanceName()
-                                  << " to tile at (" << x << ", " << y << ")." << std::endl;
-                        return false; // 返回错误
-                    }
-
-                    std::tuple<int, int, int> seqLocation = {x, y, siteIndex};
-                    seqInstance->setLocation(seqLocation);
-                    seqInstance->setLUTInitial(true); // 标记为已放置
-                }
                 isSeqPlaceFinished = true;
             }
-            if (seqBankNum.size() == 1)
+            else
             {
-                if (seqBankNum[0] == 1)
-                {
-                    // 遍历 bank 中的 SEQ 实例并进行放置
-                    for (Instance *seqInstance : bank.getSEQInstances()) // 假设 getInstances() 返回 SEQ 实例的集合
-                    {
-                        auto newLocation = seqInstance->getLocation();
-                        int siteIndex = std::get<2>(newLocation); // 获取坐标中的 siteIndex
-
-                        // 尝试将 SEQ 实例放置到 Tile 中
-                        int instID = seqInstance->getInstID();
-
-                        if (!tilePtr->addInstance(instID, siteIndex, seqInstance->getModelName(), false))
-                        {
-                            std::cout << "Error: Failed to add SEQ instance " << seqInstance->getInstanceName()
-                                      << " to tile at (" << x << ", " << y << ")." << std::endl;
-                            return false; // 返回错误
-                        }
-
-                        std::tuple<int, int, int> seqLocation = {x, y, siteIndex};
-                        seqInstance->setLocation(seqLocation);
-                        seqInstance->setLUTInitial(true); // 标记为已放置
-                    }
-                    isSeqPlaceFinished = true;
-                }
-                if (seqBankNum[0] == 0)
-                {
-                    // 遍历 bank 中的 SEQ 实例并进行放置
-                    for (Instance *seqInstance : bank.getSEQInstances()) // 假设 getInstances() 返回 SEQ 实例的集合
-                    {
-                        auto newLocation = seqInstance->getLocation();
-                        int siteIndex = std::get<2>(newLocation); // 获取坐标中的 siteIndex
-                        siteIndex += 8;
-                        // 尝试将 SEQ 实例放置到 Tile 中
-                        int instID = seqInstance->getInstID();
-
-                        if (!tilePtr->addInstance(instID, siteIndex, seqInstance->getModelName(), false))
-                        {
-                            std::cout << "Error: Failed to add SEQ instance " << seqInstance->getInstanceName()
-                                      << " to tile at (" << x << ", " << y << ")." << std::endl;
-                            return false; // 返回错误
-                        }
-                        std::tuple<int, int, int> seqLocation = {x, y, siteIndex};
-                        seqInstance->setLocation(seqLocation);
-                        seqInstance->setLUTInitial(true); // 标记为已放置
-                    }
-                    isSeqPlaceFinished = true;
-                }
+                neighbors = getNeighborTiles(x, y, 1); // 找下一个tile位置
             }
-            if (seqBankNum.size() == 2)
+            int rangeSide = 2;
+            while (!isSeqPlaceFinished)
             {
-                auto neighbors = getNeighborTile(x, y); // 找下一个tile位置
-                x = std::get<0>(neighbors);
-                y = std::get<1>(neighbors);
+                if (!neighbors.empty())
+                {
+                    x = std::get<0>(neighbors[0]);
+                    y = std::get<1>(neighbors[0]);
+                    tilePtr = chip.getTile(x, y);
+                    if (tilePtr == nullptr) // 跳过无效的 Tile
+                    {
+                        std::cout << "Error: Tile at (" << x << ", " << y << ") is invalid." << std::endl;
+                        continue;
+                    }
+
+                    if (!tilePtr->addSeqBank(bank))
+                    {
+                        neighbors.erase(neighbors.begin());
+                    }
+                    else
+                    {
+                        isSeqPlaceFinished = true;
+                        neighbors.clear();
+                    }
+                }
+                else
+                {
+                    neighbors = getNeighborTiles(x, y, rangeSide);
+                    rangeSide++;
+                }
             }
         }
     }
+
     return true; // 返回成功
 }
 
@@ -1988,7 +1959,7 @@ void printInstanceInformation()
         int totalLUTmatchedNum = 0;
         for (auto &lutGroup : lutGroups)
         {
-            
+
             if (lutGroup.second.size() == 2)
             {
                 totalLUTmatchedNum++;
@@ -1998,7 +1969,7 @@ void printInstanceInformation()
         std::cout << "匹配的LUT组数目 : " << totalLUTmatchedNum << std::endl;
         std::cout << lineBreaker << std::endl;
     }
-    
+
     if (false)
     {
         int totalFixedInstance = 0;
@@ -2035,51 +2006,75 @@ void sortPLBGrouptList(std::vector<std::set<std::set<Instance *>>> &nonFixedPLBG
 }
 
 // 获取上一个或下一个相邻的 Tile 位置，返回单个位置
-std::tuple<int, int> getNeighborTile(int x, int y)
+std::tuple<int, int> getNeighborTile(int x, int y, bool isLeft)
 {
-    // 保存原始输入以便必要时恢复
-    int originalX = x;
-    int originalY = y;
-
-    // 尝试 y + 1
-    if (y + 1 <= 299)
+    if (isLeft)
     {
-        return std::make_tuple(x, y + 1);
-    }
-    else
-    {
-        // y 超出范围，将 y 设为 0 并尝试 x + 1
-        y = 0;
-        if (x + 1 <= 149)
+        // 尝试向左移动
+        if (y - 1 >= 0)
         {
-            return std::make_tuple(x + 1, y);
+            return std::make_tuple(x, y - 1);
         }
         else
         {
-            // x + 1 也超出范围，恢复到原位置并尝试 y - 1
-            x = originalX;
-            y = originalY;
-
-            if (y - 1 >= 0)
+            // y 超出范围，重置 y 为最大值，并尝试 x - 1
+            if (x - 1 >= 0)
             {
-                return std::make_tuple(x, y - 1);
-            }
-            else
-            {
-                // y - 1 超出范围，尝试 x - 1
-                y = 299;
-                if (x - 1 >= 0)
-                {
-                    return std::make_tuple(x - 1, y);
-                }
-                else
-                {
-                    // x - 1 超出范围，返回无效位置
-                    return std::make_tuple(-1, -1);
-                }
+                return std::make_tuple(x - 1, 0);
             }
         }
     }
+    else
+    {
+        // 尝试向右移动
+        if (y + 1 <= 299)
+        {
+            return std::make_tuple(x, y + 1);
+        }
+        else
+        {
+            // y 超出范围，重置 y 为 0 并尝试 x + 1
+            if (x + 1 <= 149)
+            {
+                return std::make_tuple(x + 1, 0);
+            }
+        }
+    }
+
+    // 超出范围，返回无效位置
+    return std::make_tuple(-1, -1);
+}
+
+// 获取上一个或下一个相邻的 Tile 位置，返回单个位置
+std::vector<std::tuple<int, int>> getNeighborTiles(int x, int y, int rangeDesired)
+{
+    // 定义矩形框的左下角和右上角
+    int xl = x - rangeDesired, yl = y - rangeDesired, xr = x + rangeDesired, yr = y + rangeDesired;
+    int numCol = chip.getNumCol() - 1;
+    int numRow = chip.getNumRow() - 1;
+    // 判断不超出范围
+    if (xl < 0)
+        xl = 0;
+    if (yl < 0)
+        yl = 0;
+    if (xr > numCol)
+        xr = numCol;
+    if (yr > numRow)
+        yr = numRow;
+
+    // 生成矩形框内的所有坐标
+    std::vector<std::tuple<int, int>> coordinates;
+    for (int x = xl; x <= xr; ++x)
+    {
+        for (int y = yl; y <= yr; ++y)
+        {
+            if (isPLB[x][y])
+            {                                                    // 只加入PLB块
+                coordinates.emplace_back(std::make_tuple(x, y)); // 将坐标 (x, y) 加入向量
+            }
+        }
+    }
+    return coordinates;
 }
 
 int calculateTwoInstanceWireLength(Instance *inst1, Instance *inst2, bool isBaseLine)

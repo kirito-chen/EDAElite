@@ -29,12 +29,13 @@ void initializePLBGroupLocations(std::unordered_map<int, PLBPlacement>& plbPlace
 void initializeSEQGroupLocations(std::unordered_map<int, SEQBankPlacement>& seqPlacementMap);
 void updateLUTLocations(std::unordered_map<int, PLBPlacement>& plbPlacementMap);
 void updateSEQLocations(std::unordered_map<int, SEQBankPlacement> &seqBankMap);
-bool updateInstancesToTiles();
+bool updateInstancesToTiles(bool isSeqPack);
 void printPLBInformation();
-std::vector<std::tuple<int, int>> getNeighborTiles(int x, int y, int maxCols, int maxRows);
+std::vector<std::tuple<int, int>> getNeighborTiles(int x, int y, int rangeDesired);
 bool compareOuterSets(const std::set<std::set<Instance*>>& a, const std::set<std::set<Instance*>>& b);
 void sortPLBGrouptList(std::vector<std::set<std::set<Instance*>>>& nonFixedPLBGrouptList);
 void matchFixedLUTGroupsToPLB(std::map<int, std::set<Instance *>> &lutGroups, std::map<int, std::set<std::set<Instance *>>> &plbGroups);
 void printInstanceInformation();
-std::tuple<int, int> getNeighborTile(int x, int y);
+// std::tuple<int, int> getNeighborTile(int x, int y);
 int calculateTwoInstanceWireLength(Instance* inst1, Instance* inst2, bool isBaseLine);
+std::tuple<int, int> getNeighborTile(int x, int y, bool isLeft = true);
