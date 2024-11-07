@@ -15,4 +15,4 @@ std::unordered_map<int, PLBPlacement> plbPlacementMap;
 std::unordered_map<int, SEQBankPlacement> seqPlacementMap;
 
 std::map<int, Instance*> glbPackInstMap;    // 存储打包后的全局InstMap
-
+std::map<int, Net*> glbPackNetMap;   // 存储打包后的全局NetMap

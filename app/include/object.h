@@ -391,6 +391,10 @@ public:
 
     void addMapInstID(int _id) { instMapIDVec.push_back(_id); }
     std::vector<int> getMapInstID() { return instMapIDVec; }
+
+    void unionInputPins(const std::vector<Pin*>& vec1);
+    void unionOutputPins(const std::vector<Pin*>& vec1);
+
 };
 
 class Net

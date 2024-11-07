@@ -84,11 +84,11 @@ int main(int argc, char *argv[])
 
     //基于baseline修改
     bool isBaseline = false;
-    // readOutputNetlist(nodesFile);
+    readOutputNetlist(nodesFile);
 
     reportDesignStatistics();
 
-    readOutputNetlist(outFile);
+    // readOutputNetlist(outFile);
     legalCheck();
     reportWirelength();
 
@@ -100,7 +100,7 @@ int main(int argc, char *argv[])
     reportWirelength();
     
     // 模拟退火
-    arbsa(isBaseline);
+    newArbsa(isBaseline);
 
 
     //生成结果

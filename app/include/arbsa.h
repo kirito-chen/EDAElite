@@ -14,5 +14,5 @@ std::tuple<int, int, int> findSuitableLocForLutSet(bool isBaseline, int x, int y
 
 // int changeTileForSet(bool isBaseline, std::tuple<int, int, int> originLoc, std::tuple<int, int, int> loc, Instance *inst);
 bool isValid(bool isBaseline, int x, int y, int& z, Instance* inst);
-
+int newArbsa(bool isBaseline);
 

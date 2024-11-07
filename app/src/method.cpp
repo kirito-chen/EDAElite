@@ -674,6 +674,7 @@ void matchLUTPairs(std::map<int, Instance *> &glbInstMap, bool isLutPack, bool i
         updateSEQLocations(seqPlacementMap);
     }
     initialGlbPackInstMap(); // 初始化 glbPackInstMap
+
     updateInstancesToTiles(isSeqPack);
 }
 
@@ -1301,7 +1302,7 @@ void initializePLBPlacementMap(const std::map<int, std::set<std::set<Instance *>
 void initializeSEQPlacementMap(const std::map<int, Instance *> &glbInstMap)
 {
     int bankID = 0;
-    int wireLimit = 1; // 默认为1
+    int wireLimit = 2; // 默认为1
 
     for (const auto &instPair : glbInstMap)
     {
@@ -1795,7 +1796,7 @@ bool updateInstancesToTiles(bool isSeqPack)
             {
                 isLeft = false;
             }
-            
+
             int siteIndex = -1;
             if (tilePtr && isValid(false, x, y, siteIndex, oneLUT))
             {
@@ -2138,16 +2139,18 @@ void initialGlbPackInstMap()
             {
                 instance->addMapInstID(matchedID);
                 glbInstMap[matchedID]->setMapMatched(true);
-                // Instance *tmp = glbInstMap[matchedID];
-                // int a = 0;
+                Instance *tmp = glbInstMap[matchedID];
+                auto otherInputInstPinVec = tmp->getInpins();
+                instance->unionInputPins(otherInputInstPinVec);
+                auto otherOutputInstPinVec = tmp->getOutpins();
+                instance->unionOutputPins(otherOutputInstPinVec);
+                int a = 0;
             }
             continue;
         }
         if (instance->getModelName().substr(0, 3) == "SEQ" && !instance->isMapMatched())
         {
             glbPackInstMap.insert(std::make_pair(glbPackInstMap.size(), instance));
-            // instance->setMapMatched(true);
-            // instance->addMapInstID(instID);
 
             int seqGroupID = instance->getSEQID();
             if (!seqPlacementMap.empty())
@@ -2161,6 +2164,9 @@ void initialGlbPackInstMap()
                         // 对 instance 进行所需的修改
                         seq_instance->setMapMatched(true);
                         instance->addMapInstID(seq_instance->getInstID());
+                        instance->unionInputPins(seq_instance->getInpins());
+                        instance->unionOutputPins(seq_instance->getOutpins());
+                        int a = 0;
                     }
                 }
                 continue;
@@ -2179,4 +2185,9 @@ void initialGlbPackInstMap()
             instance->addMapInstID(instID);
         }
     }
+}
+
+void initialGlbPackNetMap()
+{
+    std::cout << " --- 生成新的glbPackNetMap ---" << std::endl;
 }
