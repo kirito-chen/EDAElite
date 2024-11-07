@@ -5,6 +5,7 @@ program="build/eda240819"
 # 检查是否传入了参数
 if [ -n "$1" ]; then
     case_number=$1
+    echo ready to run case${case_number}
     input_nodes="WorkSpace/public/Benchmark/public_release/case_${case_number}.nodes"
     input_nets="WorkSpace/public/Benchmark/public_release/case_${case_number}.nets"
     input_timing="WorkSpace/public/Benchmark/public_release/case_${case_number}.timing"
@@ -14,11 +15,11 @@ if [ -n "$1" ]; then
         echo "$program \"$input_nodes\" \"$input_nets\" \"$input_timing\" \"$output_nodes\""
     else
         $program "$input_nodes" "$input_nets" "$input_timing" "$output_nodes"
-        # ./checker/checker checker/case${case_number}.run
+        ./checker/checker checker/case${case_number}.run
     fi
 else
     # 清空Result文件夹
-    rm -f Result/*
+    rm -f Result/case_*
     # 循环从 1 到 11
     for i in {1..11}
     do
