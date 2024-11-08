@@ -1,5 +1,6 @@
 #include <iomanip>
 #include "global.h"
+#include "method.h"
 #include "object.h"
 #include "arbsa.h"
 #include <algorithm>
@@ -68,7 +69,7 @@ int calculrangeMap(bool isBaseline, std::map<int, int>& rangeActualMap){
         maxX = minX = x;
         maxY = minY = y;
         // 访问net output 引脚
-        std::list<Pin*> outputPins = net->getOutputPins();
+        std::list<Pin*>& outputPins = net->getOutputPins();
         for(Pin *pin : outputPins){
             Instance* instTmp = pin->getInstanceOwner();
             if(isBaseline){
@@ -110,7 +111,7 @@ int calculRelatedRangeMap(bool isBaseline, std::map<int, int>& rangeActualMap, c
         maxX = minX = x;
         maxY = minY = y;
         // 访问net output 引脚
-        std::list<Pin*> outputPins = net->getOutputPins();
+        std::list<Pin*>& outputPins = net->getOutputPins();
         for(Pin *pin : outputPins){
             Instance* instTmp = pin->getInstanceOwner();
             if(isBaseline){
@@ -205,11 +206,22 @@ int selectNetId(std::vector<std::pair<int,float>>& fitnessVec){ //返回具有�
     int b = generate_random_int(0, n - 1);
     int index = std::min(a, b);
     int netId = fitnessVec[index].first;
+
+    //跳过bigNet
+    if(glbBigNetPinNum > 0){
+        while(glbBigNet.find(netId) != glbBigNet.end()){
+            a = generate_random_int(0, n - 1); // 范围在 0 到 n - 1
+            b = generate_random_int(0, n - 1);
+            index = std::min(a, b);
+            netId = fitnessVec[index].first;
+        }
+    }
+
     return netId;
 }
 
 Instance* selectInst(Net *net){ //返回在net中随机选取的instance指针
-    std::list<Pin*> pinList = net->getOutputPins();
+    std::list<Pin*>& pinList = net->getOutputPins();
     pinList.emplace_back(net->getInpin());
     int n = pinList.size(); // 
     Instance* inst = nullptr;
@@ -261,7 +273,7 @@ std::pair<int,int> getNetCenter(bool isBaseline, Net *net){ //返回net的中心
       visitInst.insert(instId);
     }
     //统计outputpin
-    std::list<Pin*> pinList = net->getOutputPins();
+    std::list<Pin*>& pinList = net->getOutputPins();
     for(const auto& pin : pinList){
         Instance* inst = pin->getInstanceOwner();
         //判断是否重复出现
@@ -645,6 +657,18 @@ int arbsa(bool isBaseline){
         }
     }
 
+    //记录bigNet的cost
+    int bigNetCostPre = 0;
+    int bigNetCostCur = 0;
+    //设置引脚数超过该数字的net为bigNet
+    const int pinNumLimit = 5000; //5000
+    //填充有超过次数的bigNet
+    if(findBigNetId(pinNumLimit)){
+        //记录bigNet的cost
+        bigNetCostPre = getRelatedWirelength(isBaseline, glbBigNet);
+    }
+    int hitBigNet = 0; //统计修改影响bigNet的点数，用于更新bigNet的线长
+    int hitBigNetLimit = glbBigNetPinNum * 0.05; //引脚数的百分之二十
     //计算标准差
     double standardDeviation = calculateStandardDeviation(sigmaVecInit);
     std::cout<<"------------------------------------------------\n";
@@ -668,6 +692,18 @@ int arbsa(bool isBaseline){
         }
         exterIter ++;
         while(Iter < InnerIter){
+            /*********** 更新 bigNet cost **************/
+            if(glbBigNetPinNum > 0 && hitBigNet >= hitBigNetLimit){
+                //更新bigNet
+                bigNetCostCur = getRelatedWirelength(isBaseline, glbBigNet);
+                cost = cost - bigNetCostPre + bigNetCostCur;
+                bigNetCostPre = bigNetCostCur;
+                hitBigNet = 0;
+                //顺带更新range与fitness
+                // calculRelatedRangeMap(isBaseline, rangeActualMap, glbBigNet);
+                // calculRelatedFitness(fitnessVec, rangeDesiredMap, rangeActualMap, glbBigNet);
+            }
+
             if(Iter % 100 == 0) {
                 auto tmp = std::chrono::high_resolution_clock::now();
                 // 计算运行时间
@@ -707,17 +743,28 @@ int arbsa(bool isBaseline){
             }
             //找到这个inst附近的net
             std::set<int> instRelatedNetId;
+            bool instHasBigNet = false; //判断这个inst是否连接到bigNet
             //访问inputpin
             for(auto& pin: inst->getInpins()){
                 int netId = pin->getNetID();
                 //-1表示未连接
-                if(netId != -1) instRelatedNetId.insert(pin->getNetID());
+                if(netId == -1) continue;
+                if(glbBigNetPinNum > 0 && glbBigNet.find(netId) != glbBigNet.end()){
+                    instHasBigNet = true;
+                    continue;
+                }
+                instRelatedNetId.insert(pin->getNetID());
             }
             //访问outputpin
             for(auto& pin: inst->getOutpins()){
                 int netId = pin->getNetID();
                 //-1表示未连接
-                if(netId != -1) instRelatedNetId.insert(pin->getNetID());
+                if(netId == -1) continue;
+                if(glbBigNetPinNum > 0 && glbBigNet.find(netId) != glbBigNet.end()){
+                    instHasBigNet = true;
+                    continue;
+                }
+                instRelatedNetId.insert(pin->getNetID());
             }
             
             // 计算移动后的newCost

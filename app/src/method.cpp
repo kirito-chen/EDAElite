@@ -250,3 +250,23 @@ int setIsPLB(){
     // outputFile.close();
     return 0;
 }
+
+//如果存在 引脚数 > pinNum的netId 的net则返回true，id存储在 glbBigNet 中
+bool findBigNetId(int pinNumLimit){
+    bool hasBigNet = false;
+    glbBigNetPinNum = 0;
+    for(const auto& it : glbNetMap){
+        int netId = it.first;
+        Net* net = it.second;
+        if(net->isClock()){ //跳过clock 不参与线长计算
+            continue;
+        }
+        int pinNum = 1 + (net->getOutputPins()).size(); //+1是唯一的O_x 也就是这里唯一的inpin
+        if(pinNum > pinNumLimit){
+            glbBigNet.insert(netId);
+            glbBigNetPinNum += pinNum;
+        }
+    }
+    if(glbBigNetPinNum > 0) hasBigNet = true;
+    return hasBigNet;
+}
