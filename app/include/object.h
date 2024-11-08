@@ -266,7 +266,10 @@ class Pin
 
 public:
     Pin() : netID(-1), prop(PIN_PROP_NONE), timingCritical(false), instanceOwner(nullptr) {} // 默认构造函数
-    ~Pin() {}                                                                                // 析构函数
+    Pin(int netID, PinProp prop, bool timingCritical, Instance *instanceOwner)
+        : netID(netID), prop(prop), timingCritical(timingCritical), instanceOwner(instanceOwner) {}
+
+    ~Pin() {} // 析构函数
 
     // Getter and setter for netID
     int getNetID() const { return netID; } // -1 means unconnected
@@ -302,7 +305,7 @@ class Instance
     std::vector<int> movableRegion; // wbx，inst的可移动区域，由inst的net最小外包矩形给出
     int matchedLUTID;               // 用于存储与当前LUT匹配的LUT实例ID
 
-    bool mapMatched; // 用于检查 initialGlbPackInstMap 
+    bool mapMatched; // 用于检查 initialGlbPackInstMap
     int plbGroupID;
     int lutSetID; // 指定LUT的LUT组编号
 
@@ -392,9 +395,10 @@ public:
     void addMapInstID(int _id) { instMapIDVec.push_back(_id); }
     std::vector<int> getMapInstID() { return instMapIDVec; }
 
-    void unionInputPins(const std::vector<Pin*>& vec1);
-    void unionOutputPins(const std::vector<Pin*>& vec1);
+    void unionInputPins(const std::vector<Pin *> &vec1);
+    void unionOutputPins(const std::vector<Pin *> &vec1);
 
+    Instance *getPackInstance();
 };
 
 class Net
@@ -454,6 +458,24 @@ public:
     bool reportNet();
 
     std::vector<Pin *> getPins();
+    void addPinIfUnique(Pin *newPin)
+    {
+        // 获取 newPin 的 instanceOwner 的 ID
+        int newID = newPin->getInstanceOwner()->getInstID();
+
+        // 检查是否已经有相同 ID 的 instanceOwner 在列表中
+        for (const auto &pin : outputPins)
+        {
+            if (pin->getInstanceOwner()->getInstID() == newID)
+            {
+                // 已经有相同的 instanceOwner ID，跳过添加
+                return;
+            }
+        }
+
+        // 如果没有找到相同 ID，添加新的 Pin
+        outputPins.push_back(newPin);
+    }
 };
 
 class PLBPlacement

@@ -95,7 +95,7 @@ int main(int argc, char *argv[])
     matchLUTPairs(glbInstMap, true, true);  // 打包代码
     printInstanceInformation();
     //生成结果
-    // generateOutputFile(isBaseline, outFile);
+    generateOutputFile(isBaseline, outFile);
     legalCheck();
     reportWirelength();
     

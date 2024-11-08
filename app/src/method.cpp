@@ -673,9 +673,9 @@ void matchLUTPairs(std::map<int, Instance *> &glbInstMap, bool isLutPack, bool i
         initializeSEQPlacementMap(glbInstMap);
         updateSEQLocations(seqPlacementMap);
     }
-    initialGlbPackInstMap(); // 初始化 glbPackInstMap
-
-    updateInstancesToTiles(isSeqPack);
+    updateInstancesToTiles(isSeqPack); // 根据打包情况生成新的初始布局
+    initialGlbPackInstMap();           // 初始化 glbPackInstMap
+    initialGlbPackNetMap();
 }
 
 // PLB打包，将LUT组打包成PLB组
@@ -2127,6 +2127,7 @@ void initialGlbPackInstMap()
     {
         int instID = entry.first;
         Instance *instance = entry.second;
+        // Instance *newInstance = new Instance();
 
         // 对 LUT 类型的 instance 处理
         if (instance->getModelName().substr(0, 3) == "LUT" && !instance->isMapMatched())
@@ -2144,7 +2145,6 @@ void initialGlbPackInstMap()
                 instance->unionInputPins(otherInputInstPinVec);
                 auto otherOutputInstPinVec = tmp->getOutpins();
                 instance->unionOutputPins(otherOutputInstPinVec);
-                int a = 0;
             }
             continue;
         }
@@ -2166,7 +2166,6 @@ void initialGlbPackInstMap()
                         instance->addMapInstID(seq_instance->getInstID());
                         instance->unionInputPins(seq_instance->getInpins());
                         instance->unionOutputPins(seq_instance->getOutpins());
-                        int a = 0;
                     }
                 }
                 continue;
@@ -2190,4 +2189,28 @@ void initialGlbPackInstMap()
 void initialGlbPackNetMap()
 {
     std::cout << " --- 生成新的glbPackNetMap ---" << std::endl;
+    for (auto iter : glbNetMap)
+    {
+        auto netID = iter.first;
+        auto net = iter.second;
+        // 处理InPin
+        auto currentInPin = net->getInpin();
+        Pin *newInPin = new Pin(currentInPin->getNetID(), currentInPin->getProp(), currentInPin->getTimingCritical(), nullptr);
+        newInPin->setInstanceOwner(currentInPin->getInstanceOwner()->getPackInstance());
+
+        Net *newNet = new Net(net->getId());
+        newNet->setInpin(newInPin);
+
+        for (auto currentOutPin : net->getOutputPins())
+        {
+            Pin *newOutPin = new Pin(currentOutPin->getNetID(), currentOutPin->getProp(), currentOutPin->getTimingCritical(), nullptr);
+            newOutPin->setInstanceOwner(currentOutPin->getInstanceOwner()->getPackInstance());
+            newNet->addPinIfUnique(newOutPin);
+            // auto inst = pin->getInstanceOwner();
+            int a = 0;
+        }
+
+        glbPackNetMap.insert(std::make_pair(glbPackNetMap.size(), newNet));
+        int a = 0;
+    }
 }

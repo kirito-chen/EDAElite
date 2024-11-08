@@ -1620,44 +1620,52 @@ void Instance::updateInstRelatedNet(bool isBaseline)
   //   allRelatedNetHPWLAver = 0;
 }
 
-void Instance::unionInputPins(const std::vector<Pin*>& vec1) {
-    std::map<int, Pin*> pinMap;  // 使用 map 来根据 netID 保证唯一性
+void Instance::unionInputPins(const std::vector<Pin *> &vec1)
+{
+  std::map<int, Pin *> pinMap; // 使用 map 来根据 netID 保证唯一性
 
-    // 将 vec2 中的所有 Pin 插入到 map 中，以 netID 为键
-    for (auto pin : vec1) {
-        pinMap[pin->getNetID()] = pin;
-    }
+  // 将 vec2 中的所有 Pin 插入到 map 中，以 netID 为键
+  for (auto pin : vec1)
+  {
+    pinMap[pin->getNetID()] = pin;
+  }
 
-    // 将 vec1 中的所有 Pin 插入到 map 中，以 netID 为键
-    for (auto pin : inpins) {
-        pinMap[pin->getNetID()] = pin;
-    }
+  // 将 vec1 中的所有 Pin 插入到 map 中，以 netID 为键
+  for (auto pin : inpins)
+  {
+    pinMap[pin->getNetID()] = pin;
+  }
 
-    // 清空 vec2，并将 map 中的元素按顺序添加到 vec2
-    inpins.clear();
-    for (auto& entry : pinMap) {
-        inpins.push_back(entry.second);
-    }
+  // 清空 vec2，并将 map 中的元素按顺序添加到 vec2
+  inpins.clear();
+  for (auto &entry : pinMap)
+  {
+    inpins.push_back(entry.second);
+  }
 }
 
-void Instance::unionOutputPins(const std::vector<Pin*>& vec1) {
-    std::map<int, Pin*> pinMap;  // 使用 map 来根据 netID 保证唯一性
+void Instance::unionOutputPins(const std::vector<Pin *> &vec1)
+{
+  std::map<int, Pin *> pinMap; // 使用 map 来根据 netID 保证唯一性
 
-    // 将 vec2 中的所有 Pin 插入到 map 中，以 netID 为键
-    for (auto pin : vec1) {
-        pinMap[pin->getNetID()] = pin;
-    }
+  // 将 vec2 中的所有 Pin 插入到 map 中，以 netID 为键
+  for (auto pin : vec1)
+  {
+    pinMap[pin->getNetID()] = pin;
+  }
 
-    // 将 vec1 中的所有 Pin 插入到 map 中，以 netID 为键
-    for (auto pin : outpins) {
-        pinMap[pin->getNetID()] = pin;
-    }
+  // 将 vec1 中的所有 Pin 插入到 map 中，以 netID 为键
+  for (auto pin : outpins)
+  {
+    pinMap[pin->getNetID()] = pin;
+  }
 
-    // 清空 vec2，并将 map 中的元素按顺序添加到 vec2
-    outpins.clear();
-    for (auto& entry : pinMap) {
-        outpins.push_back(entry.second);
-    }
+  // 清空 vec2，并将 map 中的元素按顺序添加到 vec2
+  outpins.clear();
+  for (auto &entry : pinMap)
+  {
+    outpins.push_back(entry.second);
+  }
 }
 
 // 计算instance的可移动区域
@@ -2202,4 +2210,27 @@ std::vector<Pin *> Net::getPins()
   }
 
   return allPins;
+}
+
+Instance *Instance::getPackInstance()
+{
+  Instance *packInst;
+  if (!instMapIDVec.empty())
+  {
+    // packInst = glbInstMap[std::stoi(instanceName.substr(5))];
+    return this; // 不为空则返回当前instance
+  }
+  else
+  {
+    if (modelName.substr(0, 3) == "LUT") // 如果是LUT类型的话则返回它的匹配项
+    {
+      return glbInstMap[this->getMatchedLUTID()];
+    }
+    if (modelName.substr(0, 3) == "SEQ") // 如果是SEQ类型的话则根据返回它的匹配项
+    {
+      auto bank = seqPlacementMap[seqGroupID];
+      return *bank.getSEQInstances().begin();
+    }
+  }
+
 }
