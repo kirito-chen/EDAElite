@@ -9,3 +9,5 @@ perf*
 FlameGraph
 getFlameGraph.sh
 *tar.gz
+analysis
+*.json

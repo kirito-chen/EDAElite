@@ -654,13 +654,19 @@ int arbsa(bool isBaseline){
     }
     std::cout<<"[INFO] The simulated annealing algorithm starts "<< std::endl;
     std::cout<<"[INFO] initial temperature T= "<< T <<", threshhold= "<<threashhold<<", alpha= "<<alpha<< ", InnerIter= "<<InnerIter<<", seed="<<seed<<std::endl;
-
+    int exterIter = 0;
+    int exterIterLimit = 10;
     bool timeup = false;
     // 外层循环 温度大于阈值， 更新一次fitness优先级列表
     while(T > threashhold){
         //记录接受的new_cost
         std::vector<int> sigmaVec; 
         // 内层循环 小于内层迭代次数
+        
+        if(exterIter >= exterIterLimit){
+            break;
+        }
+        exterIter ++;
         while(Iter < InnerIter){
             if(Iter % 100 == 0) {
                 auto tmp = std::chrono::high_resolution_clock::now();
@@ -810,6 +816,8 @@ int arbsa(bool isBaseline){
 
     // 输出运行时间（单位为秒）
     std::cout << "runtime: " << duration.count() << " s" << std::endl;
+    std::cout << "runtime/exterIterLimit:" << duration.count() / (exterIterLimit) <<" runtime/iter:" << duration.count() / ((exterIterLimit)*2000)<< std::endl;
+
     return 0;
 }
 
