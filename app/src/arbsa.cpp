@@ -566,7 +566,10 @@ int changeTile(bool isBaseline, std::tuple<int, int, int> originLoc, std::tuple<
     return 0;
 }
 
-int arbsa(bool isBaseline, std::string nodesFile, const std::chrono::time_point<std::chrono::high_resolution_clock>& start){
+int arbsa(bool isBaseline, std::string nodesFile, const std::chrono::time_point<std::chrono::high_resolution_clock>& allStart){
+
+    // 记录开始时间
+    const std::chrono::time_point<std::chrono::high_resolution_clock> start = std::chrono::high_resolution_clock::now();
 
     /*********参数初始化********/ 
     // 初始化迭代次数Iter、初始化温度T 冷却计划
@@ -720,7 +723,10 @@ int arbsa(bool isBaseline, std::string nodesFile, const std::chrono::time_point<
     std::cout<<"[INFO] The simulated annealing algorithm starts "<< std::endl;
     std::cout<<"[INFO] initial temperature T= "<< T <<", threshhold= "<<threashhold<<", alpha= "<<
                 alpha<< ", InnerIter= "<<InnerIter<<", seed= "<<seed<<", iterLimit= "<<iterLimit<<std::endl;
- 
+    
+    int exterIter = 0;
+    int exterIterLimit = 10;
+
     /************ 循环主体 ***********/
     // 外层循环 温度大于阈值， 更新一次fitness优先级列表
     while(T > threashhold){
@@ -739,6 +745,10 @@ int arbsa(bool isBaseline, std::string nodesFile, const std::chrono::time_point<
                 costPre = cost;
             }
         }*/
+        if(exterIter >= exterIterLimit){
+            break;
+        }
+        exterIter++;
         // 内层循环 小于内层迭代次数
         while(iter < InnerIter){
             /*********** 更新 bigNet cost **************/
@@ -949,7 +959,7 @@ int arbsa(bool isBaseline, std::string nodesFile, const std::chrono::time_point<
     std::cout << "SA runtime: " << duration.count() << " s" << std::endl;
     //计算平均每次运行时间
     // std::cout << "runtime/iterLimit:" << duration.count() / (iterLimit-1) <<" runtime/iter:" << duration.count() / ((iterLimit-1)*2000)<< std::endl;
-
+     std::cout << "runtime/exterIterLimit:" << duration.count() / (exterIterLimit) <<" runtime/iter:" << duration.count() / ((exterIterLimit)*2000)<< std::endl;
     return 0;
 }
 
