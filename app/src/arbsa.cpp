@@ -11,6 +11,8 @@
 #include <chrono>
 
 // #define DEBUG
+// #define EXTERITER  //是否固定外部循环次数
+#define INFO  //是否输出每次的迭代信息
 
 // 全局随机数生成器
 std::mt19937& get_random_engine() {
@@ -93,10 +95,6 @@ int calculrangeMap(bool isBaseline, std::map<int, int>& rangeActualMap){
 //优化，循环体中只计算相关的
 int calculRelatedRangeMap(bool isBaseline, std::map<int, int>& rangeActualMap, const std::set<int>& instRelatedNetId){
     for(int i : instRelatedNetId){
-        if(glbNetMap.count(i) <= 0){
-            std::cout<<"calculRelatedRangeMap can not find this netId:"<<i<<std::endl;
-            continue;
-        }
         Net *net = glbNetMap[i];
         // 访问net input 引脚
         Instance* instIn = net->getInpin()->getInstanceOwner();
@@ -160,10 +158,6 @@ int calculRelatedFitness(std::vector<std::pair<int,float>>& fitnessVec, std::map
     // 计算fitness
     int n = fitnessVec.size();
     for(auto netId : instRelatedNetId){
-        if(glbNetMap.count(netId) <= 0){
-            std::cout<<"calculRelatedFitness can not find this netId:"<<netId<<std::endl;
-            continue;
-        }
         int index = -1; 
         //找到匹配netId的下标
         for (int i = 0; i < fitnessVec.size(); ++i) {
@@ -172,10 +166,12 @@ int calculRelatedFitness(std::vector<std::pair<int,float>>& fitnessVec, std::map
                 break;
             }
         }
+        #ifdef DEBUG
         if(index == -1){
             std::cout<<"can not find this netId: "<<netId <<", something may be wrong"<<std::endl;
             exit(1);
         }
+        #endif
         int rangeDesired = rangeDesiredMap[netId];
         int rangeActual = rangeActualMap[netId];
         float fitness;
@@ -622,13 +618,21 @@ int arbsa(bool isBaseline, std::string nodesFile){
         for(auto& pin: inst->getInpins()){
             int netId = pin->getNetID();
             //-1表示未连接
-            if(netId != -1) instRelatedNetId.insert(pin->getNetID());
+            if(netId == -1) continue;
+            if(glbBigNetPinNum > 0 && glbBigNet.find(netId) != glbBigNet.end()){
+                continue;
+            }
+            instRelatedNetId.insert(pin->getNetID());
         }
         //访问outputpin
         for(auto& pin: inst->getOutpins()){
             int netId = pin->getNetID();
             //-1表示未连接
-            if(netId != -1) instRelatedNetId.insert(pin->getNetID());
+            if(netId == -1) continue;
+            if(glbBigNetPinNum > 0 && glbBigNet.find(netId) != glbBigNet.end()){
+                continue;
+            }
+            instRelatedNetId.insert(pin->getNetID());
         }
         
         // 计算移动后的newCost
@@ -694,19 +698,22 @@ int arbsa(bool isBaseline, std::string nodesFile){
     }
     std::cout<<"[INFO] The simulated annealing algorithm starts "<< std::endl;
     std::cout<<"[INFO] initial temperature T= "<< T <<", threshhold= "<<threashhold<<", alpha= "<<alpha<< ", InnerIter= "<<InnerIter<<", seed="<<seed<<std::endl;
+#ifdef EXTERITER
     int exterIter = 0;
     int exterIterLimit = 10;
+#endif
     bool timeup = false;
     // 外层循环 温度大于阈值， 更新一次fitness优先级列表
     while(T > threashhold){
         //记录接受的new_cost
         std::vector<int> sigmaVec; 
         // 内层循环 小于内层迭代次数
-        
+#ifdef EXTERITER
         if(exterIter >= exterIterLimit){
             break;
         }
         exterIter ++;
+#endif
         while(Iter < InnerIter){
             /*********** 更新 bigNet cost **************/
             if(glbBigNetPinNum > 0 && hitBigNet >= hitBigNetLimit){
@@ -741,7 +748,9 @@ int arbsa(bool isBaseline, std::string nodesFile){
                         break;
                     }
                 }
+                #ifdef INFO
                 std::cout<<"[INFO] T:"<< std::scientific << std::setprecision(3) <<T <<" iter:"<<std::setw(4)<<Iter<<" alpha:"<<std::fixed<<std::setprecision(2)<<alpha<<" cost:"<<std::setw(7)<<cost<<std::endl;
+                #endif
             }
             // std::cout<<"[INFO] T:"<< std::scientific << std::setprecision(3) <<T <<" iter:"<<std::setw(4)<<Iter<<" alpha:"<<std::fixed<<std::setprecision(2)<<alpha<<" cost:"<<std::setw(7)<<cost<<std::endl;
             Iter++;
@@ -896,8 +905,9 @@ int arbsa(bool isBaseline, std::string nodesFile){
 
     // 输出运行时间（单位为秒）
     std::cout << "runtime: " << duration.count() << " s" << std::endl;
+#ifdef EXTERITER
     std::cout << "runtime/exterIterLimit:" << duration.count() / (exterIterLimit) <<" runtime/iter:" << duration.count() / ((exterIterLimit)*2000)<< std::endl;
-
+#endif
     return 0;
 }
 
