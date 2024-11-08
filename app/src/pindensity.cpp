@@ -130,3 +130,72 @@ bool reportPinDensity() {
 
   return true;      
 }
+
+//必须计算baseline
+void setPinDensityMapAndTopValues(){
+    //设置密度map
+    int checkedTileCnt = 0;
+    // 1) baseline
+    for (int i = 0; i < chip.getNumCol(); i++) {
+        for (int j = 0; j < chip.getNumRow(); j++) {
+            Tile* tile = chip.getTile(i, j);
+            if (tile->matchType("PLB") == false) {
+                continue;        
+            }
+            if (tile->isEmpty(true)) {  // baseline
+              continue;
+            }
+
+            // baseline
+            int numInterTileConn = tile->getConnectedLutSeqInput(true).size() + tile->getConnectedLutSeqOutput(true).size();          
+            double ratio = (double)(numInterTileConn) / (MAX_TILE_PIN_INPUT_COUNT + MAX_TILE_PIN_OUTPUT_COUNT);
+            int loc = i*1000+j; //x与y组成一个int
+            glbPinDensityMap[loc] = ratio;
+            checkedTileCnt++;
+        }
+    }
+    glbTopKNum = checkedTileCnt * 0.05;
+    //设置 glbTopK
+    for(const auto& it : glbPinDensityMap){
+        double ratio = it.second;
+        glbTopK.insert(ratio);
+        if(glbTopK.size() > glbTopKNum){
+           glbTopK.erase(glbTopK.begin());
+        }
+    }
+    double sum = 0.0;
+    for(const double& i : glbTopK){
+        sum += i;
+    }
+    glbInitTopSum = sum;
+}
+
+//更新全局密度map
+void updatePinDensityMapAndTopValues(){
+    // 1) baseline
+    for (int i = 0; i < chip.getNumCol(); i++) {
+        for (int j = 0; j < chip.getNumRow(); j++) {
+            Tile* tile = chip.getTile(i, j);
+            if (tile->matchType("PLB") == false) {
+                continue;        
+            }
+            if (tile->isEmpty(true)) {  // baseline
+              continue;
+            }
+            // baseline
+            int numInterTileConn = tile->getConnectedLutSeqInput(true).size() + tile->getConnectedLutSeqOutput(true).size();          
+            double ratio = (double)(numInterTileConn) / (MAX_TILE_PIN_INPUT_COUNT + MAX_TILE_PIN_OUTPUT_COUNT);
+            int loc = i*1000+j; //x与y组成一个int
+            glbPinDensityMap[loc] = ratio;
+        }
+    }
+}
+
+//只能获取baseline的  根据x y 获取pin密度
+double getPinDensityByXY(int x, int y){
+    Tile* tile = chip.getTile(x, y);
+    // baseline
+    int numInterTileConn = tile->getConnectedLutSeqInput(true).size() + tile->getConnectedLutSeqOutput(true).size();          
+    double ratio = (double)(numInterTileConn) / (MAX_TILE_PIN_INPUT_COUNT + MAX_TILE_PIN_OUTPUT_COUNT);
+    return ratio;
+}

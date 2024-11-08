@@ -7,6 +7,7 @@
 #include <cmath>
 #include "wirelength.h"
 #include <random>
+#include "pindensity.h"
 // 计时
 #include <chrono>
 
@@ -555,6 +556,59 @@ int changeTile(bool isBaseline, std::tuple<int, int, int> originLoc, std::tuple<
     return 0;
 }
 
+bool tryUpdatePinDensity(std::tuple<int,int,int> originLoc, std::tuple<int,int,int> loc){
+    //获取旧的pin密度
+    int originLocIndex = std::get<0>(originLoc) * 1000 + std::get<1>(originLoc);
+    int locIndex = std::get<0>(loc) * 1000 + std::get<1>(loc);
+
+    double oldOriginLocPD = glbPinDensityMap[originLocIndex];
+    double oldLocPD = glbPinDensityMap[locIndex];
+
+    //获取新的pin密度
+    double newOriginLocPD = getPinDensityByXY(std::get<0>(originLoc), std::get<1>(originLoc));
+    double newLocPD = getPinDensityByXY(std::get<0>(loc), std::get<1>(loc));
+
+    // 创建top_k的副本并在副本上模拟更新
+    std::multiset<double> topKcopy = glbTopK;
+
+    //考虑originLoc
+    //如果旧值在topK
+    auto it = topKcopy.find(oldOriginLocPD);
+    if(it != topKcopy.end()){
+        topKcopy.erase(it);
+    }
+    //插入新值
+    topKcopy.insert(newOriginLocPD); 
+    //考虑loc
+    it = topKcopy.find(oldLocPD);
+    if(it != topKcopy.end()){
+        topKcopy.erase(it);
+    }
+    //插入新值
+    topKcopy.insert(newLocPD);  
+    // 确保top_k_copy保持50个元素
+    while (topKcopy.size() > glbTopKNum) {
+        topKcopy.erase(topKcopy.begin()); // 保持top_k_copy大小为5%
+    }
+    // 计算新和
+    double potentialSum = 0.0;
+    for (const auto& val : topKcopy) {
+        potentialSum += val;
+    }
+    const double eps = 1e-6;
+    if (int(potentialSum*10000) > int(glbInitTopSum*10000)+1) {
+        //不做修改
+        return false;
+    }
+    else{
+        //应用修改
+        glbTopK = topKcopy;
+        glbPinDensityMap[originLocIndex] = newOriginLocPD;
+        glbPinDensityMap[locIndex] = newLocPD;
+        return true;
+    }
+}
+
 int arbsa(bool isBaseline, std::string nodesFile){
     // 记录开始时间
     auto start = std::chrono::high_resolution_clock::now();
@@ -697,7 +751,8 @@ int arbsa(bool isBaseline, std::string nodesFile){
         T = 0.5 * standardDeviation;
     }
     std::cout<<"[INFO] The simulated annealing algorithm starts "<< std::endl;
-    std::cout<<"[INFO] initial temperature T= "<< T <<", threshhold= "<<threashhold<<", alpha= "<<alpha<< ", InnerIter= "<<InnerIter<<", seed="<<seed<<std::endl;
+    std::cout<<"[INFO] initial temperature T = "<< T <<", threshhold = "<<threashhold<<", alpha = "<<alpha<<
+             ", InnerIter = "<<InnerIter<<", seed ="<<seed << ", iterLimit ="<< iterLimit <<std::endl;
 #ifdef EXTERITER
     int exterIter = 0;
     int exterIterLimit = 10;
@@ -714,6 +769,7 @@ int arbsa(bool isBaseline, std::string nodesFile){
         }
         exterIter ++;
 #endif
+        // updatePinDensityMapAndTopValues(); //更新全局密度
         while(Iter < InnerIter){
             /*********** 更新 bigNet cost **************/
             if(glbBigNetPinNum > 0 && hitBigNet >= hitBigNetLimit){
@@ -827,9 +883,16 @@ int arbsa(bool isBaseline, std::string nodesFile){
             #ifdef DEBUG
                 std::cout<<"DEBUG-deta:"<<deta<<std::endl;
             #endif
+
+            //计算pin密度变化 tryUpdateAndCheck
+            //改变tile
+            changeTile(isBaseline, originLoc, loc, inst);
+
+            // 生成一个 0 到 1 之间的随机浮点数
+            double randomValue = generate_random_double(0.0, 1.0);
+            double eDetaT = exp(-deta/T);
             // if deta < 0 更新这个操作到布局中，更新fitness列表
-            if(deta < 0){
-                changeTile(isBaseline, originLoc, loc, inst);
+            if((deta < 0 || randomValue < eDetaT) && tryUpdatePinDensity(originLoc, loc)){
                 // 间隔次数多了再更新这两
                 // calculRelatedRangeMap(isBaseline, rangeActualMap, instRelatedNetId);
                 // calculRelatedFitness(fitnessVec, rangeDesiredMap, rangeActualMap, instRelatedNetId);
@@ -838,27 +901,12 @@ int arbsa(bool isBaseline, std::string nodesFile){
                 // sortedFitness(fitnessVec);
             }
             else{
-                // else 取(0,1)随机数，判断随机数是否小于 e^(-deta/T) 是则同样更新操作，更新fitness列表
-                // 生成一个 0 到 1 之间的随机浮点数
-                double randomValue = generate_random_double(0.0, 1.0);
-                double eDetaT = exp(-deta/T);
-                #ifdef DEBUG
-                    std::cout<<"DEBUG-randomValue:"<<randomValue<<", eDetaT:"<<eDetaT<<std::endl;
-                #endif
-                if(randomValue < eDetaT){
-                    changeTile(isBaseline, originLoc, loc, inst);
-                    // 间隔次数多了再更新这两
-                    // calculRelatedRangeMap(isBaseline, rangeActualMap, instRelatedNetId);
-                    // calculRelatedFitness(fitnessVec, rangeDesiredMap, rangeActualMap, instRelatedNetId);
-                    cost = costNew;
-                    sigmaVec.emplace_back(costNew);
-                }
-                else{ //复原
-                    if(isBaseline){
-                        inst->setBaseLocation(originLoc);
-                    } else{
-                        inst->setLocation(originLoc);
-                    }
+                //复原
+                changeTile(isBaseline, loc, originLoc, inst);
+                if(isBaseline){
+                    inst->setBaseLocation(originLoc);
+                } else{
+                    inst->setLocation(originLoc);
                 }
             }
             // counterNet 计数+1
