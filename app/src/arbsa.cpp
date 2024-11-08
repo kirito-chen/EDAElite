@@ -559,7 +559,7 @@ int changeTile(bool isBaseline, std::tuple<int, int, int> originLoc, std::tuple<
     return 0;
 }
 
-int arbsa(bool isBaseline){
+int arbsa(bool isBaseline, std::string nodesFile){
     // 记录开始时间
     auto start = std::chrono::high_resolution_clock::now();
 
@@ -657,6 +657,22 @@ int arbsa(bool isBaseline){
         }
     }
 
+    //读取次数  data.json文件
+    int caseNumber = extractNumber(nodesFile);
+    int iterLimit = -1;
+    int iterTotal = 0;
+    const std::string filename = "data.json";
+    // 读取 JSON 文件内容
+    NestedMap jsonData;
+
+    if(fileExists(filename)){
+        jsonData = readJsonFile(filename);
+        if(jsonData[std::to_string(caseNumber)].find(std::to_string(timeLimit)) != jsonData[std::to_string(caseNumber)].end()){
+            //找到了参数
+            iterLimit = jsonData[std::to_string(caseNumber)][std::to_string(timeLimit)];
+        }
+    }
+
     //记录bigNet的cost
     int bigNetCostPre = 0;
     int bigNetCostCur = 0;
@@ -705,17 +721,31 @@ int arbsa(bool isBaseline){
             }
 
             if(Iter % 100 == 0) {
-                auto tmp = std::chrono::high_resolution_clock::now();
-                // 计算运行时间
-                std::chrono::duration<double> durationtmp = tmp - start;
-                if(durationtmp.count() >= timeLimit){  //1180
-                    timeup = true;
-                    break;
+                if(iterLimit > 0){
+                    if(iterTotal >= iterLimit){
+                        timeup = true;
+                        break;
+                    }
+                }
+                else{
+                    auto tmp = std::chrono::high_resolution_clock::now();
+                    // 计算运行时间
+                    std::chrono::duration<double> durationtmp = tmp - start;
+                    if(durationtmp.count() >= timeLimit){  //1180
+                        timeup = true;
+                        if(!jsonData.count(std::to_string(caseNumber))){
+                            std::map<std::string, int> t;
+                            jsonData[std::to_string(caseNumber)] = t;
+                        }
+                        jsonData[std::to_string(caseNumber)][std::to_string(timeLimit)] = iterTotal;
+                        break;
+                    }
                 }
                 std::cout<<"[INFO] T:"<< std::scientific << std::setprecision(3) <<T <<" iter:"<<std::setw(4)<<Iter<<" alpha:"<<std::fixed<<std::setprecision(2)<<alpha<<" cost:"<<std::setw(7)<<cost<<std::endl;
             }
             // std::cout<<"[INFO] T:"<< std::scientific << std::setprecision(3) <<T <<" iter:"<<std::setw(4)<<Iter<<" alpha:"<<std::fixed<<std::setprecision(2)<<alpha<<" cost:"<<std::setw(7)<<cost<<std::endl;
             Iter++;
+            iterTotal++;
             // 根据fitness列表选择一个net
             int netId = selectNetId(fitnessVec);
             #ifdef DEBUG
@@ -854,6 +884,9 @@ int arbsa(bool isBaseline){
         // 排序fitness列表
         sortedFitness(fitnessVec);
     }
+
+    //记录截止次数
+    writeJsonFile(filename, jsonData);
     
     // 记录结束时间
     auto end = std::chrono::high_resolution_clock::now();

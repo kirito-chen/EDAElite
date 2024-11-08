@@ -77,10 +77,11 @@ int main(int argc, char *argv[])
 
     //基于baseline修改
     bool isBaseline = true;
+
     //设置isPLB数组
     setIsPLB();
     // 模拟退火
-    arbsa(isBaseline);
+    arbsa(isBaseline, nodesFile);
 
     //生成结果
     generateOutputFile(isBaseline, outFile);

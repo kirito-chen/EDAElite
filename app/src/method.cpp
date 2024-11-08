@@ -7,6 +7,7 @@
 #include <fstream>
 #include <iostream>
 #include <map>
+#include <regex>
 
 // 计算PLB余量的函数——吴白轩——2024年10月18日
 void calculateTileRemain()
@@ -269,4 +270,84 @@ bool findBigNetId(int pinNumLimit){
     }
     if(glbBigNetPinNum > 0) hasBigNet = true;
     return hasBigNet;
+}
+
+//提取node文件的数字
+int extractNumber(const std::string& filePath) {
+    std::regex pattern(R"(case_(\d+)\.nodes)");  // 正则表达式：匹配"case_"后面的数字，直到".nodes"
+    std::smatch match;
+
+    if (std::regex_search(filePath, match, pattern)) {
+        return std::stoi(match[1]);  // 提取并转换为整数
+    } else {
+        throw std::runtime_error("无法从文件名中提取数字");
+    }
+}
+
+bool fileExists(const std::string& filePath) {
+    std::ifstream file(filePath);
+    return file.good();
+}
+
+
+// 从 JSON 文件读取并解析数据到 NestedMap
+NestedMap readJsonFile(const std::string& filename) {
+    NestedMap data;
+    std::ifstream inputFile(filename);
+    if (!inputFile.is_open()) {
+        std::cerr << "Error opening file for reading." << filename << std::endl;
+        exit(1);
+    }
+
+    std::string line;
+    std::string outerKey, innerKey;
+    int value;
+
+    while (std::getline(inputFile, line)) {
+        // 查找外层键（例如："1"）
+        if (line.find("\"") != std::string::npos && line.find(": {") != std::string::npos) {
+            outerKey = line.substr(line.find("\"") + 1, line.rfind("\"") - line.find("\"") - 1);
+            data[outerKey] = {};
+        }
+
+        // 查找内层键值对（例如："60": 11）
+        if (line.find(":") != std::string::npos && line.find("{") == std::string::npos) {
+            size_t keyStart = line.find("\"") + 1;
+            size_t keyEnd = line.find("\"", keyStart);
+            innerKey = line.substr(keyStart, keyEnd - keyStart);
+
+            size_t valueStart = line.find(": ", keyEnd) + 2;
+            value = std::stoi(line.substr(valueStart));
+
+            data[outerKey][innerKey] = value;
+        }
+    }
+
+    inputFile.close();
+    return data;
+}
+
+// 将 NestedMap 写入到 JSON 文件
+void writeJsonFile(const std::string& filename, const NestedMap& data) {
+    std::ofstream outputFile(filename);
+    if (!outputFile.is_open()) {
+        std::cerr << "Error opening file for writing." << filename << std::endl;
+        exit(1);
+    }
+
+    outputFile << "{\n";
+    for (auto outerIt = data.begin(); outerIt != data.end(); ++outerIt) {
+        outputFile << "    \"" << outerIt->first << "\": {\n";
+        for (auto innerIt = outerIt->second.begin(); innerIt != outerIt->second.end(); ++innerIt) {
+            outputFile << "        \"" << innerIt->first << "\": " << innerIt->second;
+            if (std::next(innerIt) != outerIt->second.end()) outputFile << ",";
+            outputFile << "\n";
+        }
+        outputFile << "    }";
+        if (std::next(outerIt) != data.end()) outputFile << ",";
+        outputFile << "\n";
+    }
+    outputFile << "}\n";
+
+    outputFile.close();
 }
