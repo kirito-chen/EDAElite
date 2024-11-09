@@ -129,3 +129,24 @@ int getHPWL(bool isBaseline){
 
   return HPWL;
 }
+
+
+//wbx 获取pack线长
+int getPackWirelength(bool isBaseline){
+  int totalCritWirelength = 0;
+  int totalWirelength = 0;
+  for (auto iter : glbPackNetMap)
+  {
+    Net *net = iter.second;
+    if (net->isClock())
+    {
+      continue;
+    }
+    totalCritWirelength += net->getCritWireLength(isBaseline);
+    totalWirelength += net->getNonCritWireLength(isBaseline);
+  }
+
+  // append critical wirelength to total wirelength
+  totalWirelength += totalCritWirelength;
+  return totalWirelength;
+}

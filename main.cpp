@@ -89,14 +89,14 @@ int main(int argc, char *argv[])
     reportDesignStatistics();
 
     // readOutputNetlist(outFile);
-    legalCheck();
-    reportWirelength();
+    // legalCheck();
+    // reportWirelength();
 
     matchLUTPairs(glbInstMap, true, true);  // 打包代码
     printInstanceInformation();
     //生成结果
-    generateOutputFile(isBaseline, outFile);
-    legalCheck();
+    // generateOutputFile(isBaseline, outFile);
+    // legalCheck();
     reportWirelength();
     
     // 模拟退火

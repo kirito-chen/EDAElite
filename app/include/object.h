@@ -411,13 +411,18 @@ class Net
     int HPWL;     // 当前net的总半周线长
 
     std::vector<int> netArea; // net 的最小外包矩形
+    int originID;             // 原始的netID，用于找instance的pin的新的netID
 
 public:
     Net(int netID) : id(netID), clock(false), inpin(nullptr)
     {
         netArea.assign(4, -1); //(xlb,ylb,xrt,yrt)
+        originID = -1;
     } // 默认构造函数
     ~Net() {} // 析构函数
+
+    int getOriginID() { return originID; }
+    void setOriginID(int _originID) { originID = _originID; }
 
     // Getter and setter for id
     int getId() const { return id; }

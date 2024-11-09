@@ -41,6 +41,6 @@ int calculateTwoInstanceWireLength(Instance* inst1, Instance* inst2, bool isBase
 std::tuple<int, int> getNeighborTile(int x, int y, bool isLeft = true);
 void initialGlbPackInstMap();
 void initialGlbPackNetMap();
-
+void recoverAllMap();
 
 

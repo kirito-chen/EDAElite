@@ -1302,7 +1302,7 @@ void initializePLBPlacementMap(const std::map<int, std::set<std::set<Instance *>
 void initializeSEQPlacementMap(const std::map<int, Instance *> &glbInstMap)
 {
     int bankID = 0;
-    int wireLimit = 2; // 默认为1
+    int wireLimit = 1; // 默认为1
 
     for (const auto &instPair : glbInstMap)
     {
@@ -2189,28 +2189,76 @@ void initialGlbPackInstMap()
 void initialGlbPackNetMap()
 {
     std::cout << " --- 生成新的glbPackNetMap ---" << std::endl;
+    int newNetPackID = 0;
     for (auto iter : glbNetMap)
     {
         auto netID = iter.first;
         auto net = iter.second;
+        oldNetID2newNetID.insert(std::make_pair(netID, newNetPackID)); // 建立旧netID到新netID的映射
         // 处理InPin
         auto currentInPin = net->getInpin();
-        Pin *newInPin = new Pin(currentInPin->getNetID(), currentInPin->getProp(), currentInPin->getTimingCritical(), nullptr);
+        if (currentInPin->getInstanceOwner()->getMapInstID().size() == 0)
+        {
+            continue;
+        }
+
+        Pin *newInPin = new Pin(newNetPackID, currentInPin->getProp(), currentInPin->getTimingCritical(), nullptr);
         newInPin->setInstanceOwner(currentInPin->getInstanceOwner()->getPackInstance());
 
-        Net *newNet = new Net(net->getId());
+        Net *newNet = new Net(newNetPackID);
         newNet->setInpin(newInPin);
-
         for (auto currentOutPin : net->getOutputPins())
         {
-            Pin *newOutPin = new Pin(currentOutPin->getNetID(), currentOutPin->getProp(), currentOutPin->getTimingCritical(), nullptr);
+            Pin *newOutPin = new Pin(newNetPackID, currentOutPin->getProp(), currentOutPin->getTimingCritical(), nullptr);
             newOutPin->setInstanceOwner(currentOutPin->getInstanceOwner()->getPackInstance());
             newNet->addPinIfUnique(newOutPin);
             // auto inst = pin->getInstanceOwner();
             int a = 0;
         }
 
-        glbPackNetMap.insert(std::make_pair(glbPackNetMap.size(), newNet));
+        glbPackNetMap.insert(std::make_pair(newNetPackID, newNet));
+        newNetPackID++;
         int a = 0;
+    }
+}
+
+// 还原最终结果映射
+void recoverAllMap()
+{
+    std::cout << "还原所有映射" << std::endl;
+    for (auto inst : glbPackInstMap)
+    {
+        auto instance = inst.second;
+        auto location = instance->getLocation();
+        int x = std::get<0>(location);
+        int y = std::get<1>(location);
+        int z = std::get<2>(location);
+
+        if (instance->getModelName().substr(0, 3) == "SEQ")
+        {
+            auto instVec = instance->getMapInstID();
+            if (z == 0)
+            {
+                for (int i = 0; i < instVec.size(); i++)
+                {
+                    glbInstMap[instVec[i]]->setLocation(std::make_tuple(x, y, i));
+                }
+            }
+            if (z == 1)
+            {
+                for (int i = 0; i < instVec.size(); i++)
+                {
+                    glbInstMap[instVec[i]]->setLocation(std::make_tuple(x, y, i + 8));
+                }
+            }
+        }
+        else
+        {
+            auto instVec = instance->getMapInstID();
+            for (int i = 0; i < instVec.size(); i++)
+            {
+                glbInstMap[instVec[i]]->setLocation(location);
+            }
+        }
     }
 }

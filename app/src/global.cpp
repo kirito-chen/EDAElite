@@ -16,3 +16,6 @@ std::unordered_map<int, SEQBankPlacement> seqPlacementMap;
 
 std::map<int, Instance*> glbPackInstMap;    // 存储打包后的全局InstMap
 std::map<int, Net*> glbPackNetMap;   // 存储打包后的全局NetMap
+
+
+std::map<int, int> oldNetID2newNetID; //全局映射，存放旧netID到新netID的映射
