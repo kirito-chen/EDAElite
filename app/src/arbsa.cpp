@@ -12,7 +12,7 @@
 #include <chrono>
 
 // #define DEBUG
-// #define EXTERITER  //是否固定外部循环次数
+#define EXTERITER  //是否固定外部循环次数
 #define INFO  //是否输出每次的迭代信息
 
 // 全局随机数生成器
@@ -556,55 +556,78 @@ int changeTile(bool isBaseline, std::tuple<int, int, int> originLoc, std::tuple<
     return 0;
 }
 
+
+//删除旧值，插入新值
+
 bool tryUpdatePinDensity(std::tuple<int,int,int> originLoc, std::tuple<int,int,int> loc){
-    //获取旧的pin密度
     int originLocIndex = std::get<0>(originLoc) * 1000 + std::get<1>(originLoc);
     int locIndex = std::get<0>(loc) * 1000 + std::get<1>(loc);
+    //获取旧的pin密度
+    int oldOriginLocPD = 0;
+    int oldLocPD = 0;
+    auto itOrigin = std::find_if(glbPinDensity.begin(), glbPinDensity.end(), [originLocIndex](const std::pair<int, int>& p) {
+        return p.first == originLocIndex;
+    });
+    if (itOrigin != glbPinDensity.end()) {
+        oldOriginLocPD = itOrigin->second;
+    } 
+    auto it = std::find_if(glbPinDensity.begin(), glbPinDensity.end(), [locIndex](const std::pair<int, int>& p) {
+        return p.first == locIndex;
+    });
+    if (it != glbPinDensity.end()) {
+        oldLocPD = it->second;
+    } 
 
-    double oldOriginLocPD = glbPinDensityMap[originLocIndex];
-    double oldLocPD = glbPinDensityMap[locIndex];
+    //获取新的pin密度分子
+    int newOriginLocPD = getPinDensityByXY(std::get<0>(originLoc), std::get<1>(originLoc));
+    int newLocPD = getPinDensityByXY(std::get<0>(loc), std::get<1>(loc));
 
-    //获取新的pin密度
-    double newOriginLocPD = getPinDensityByXY(std::get<0>(originLoc), std::get<1>(originLoc));
-    double newLocPD = getPinDensityByXY(std::get<0>(loc), std::get<1>(loc));
-
-    // 创建top_k的副本并在副本上模拟更新
-    std::multiset<double> topKcopy = glbTopK;
-
-    //考虑originLoc
-    //如果旧值在topK
-    auto it = topKcopy.find(oldOriginLocPD);
-    if(it != topKcopy.end()){
-        topKcopy.erase(it);
+    //修改
+    if(itOrigin == glbPinDensity.end()){
+        glbPinDensity.emplace_back(std::make_pair(originLocIndex, newOriginLocPD));
     }
-    //插入新值
-    topKcopy.insert(newOriginLocPD); 
-    //考虑loc
-    it = topKcopy.find(oldLocPD);
-    if(it != topKcopy.end()){
-        topKcopy.erase(it);
+    else{
+        itOrigin->second = newOriginLocPD;
     }
-    //插入新值
-    topKcopy.insert(newLocPD);  
-    // 确保top_k_copy保持50个元素
-    while (topKcopy.size() > glbTopKNum) {
-        topKcopy.erase(topKcopy.begin()); // 保持top_k_copy大小为5%
+    if(it == glbPinDensity.end()){
+        glbPinDensity.emplace_back(std::make_pair(locIndex, newLocPD));
     }
+    else{
+        it->second = newLocPD;
+    }
+    
+
+    //排序
+    std::sort(glbPinDensity.begin(), glbPinDensity.end(), [](const std::pair<int, int>& a, const std::pair<int, int>& b) {
+        return a.second > b.second; // 按值降序排序
+    });
+    itOrigin = std::find_if(glbPinDensity.begin(), glbPinDensity.end(), [originLocIndex](const std::pair<int, int>& p) {
+        return p.first == originLocIndex;
+    });
+    it = std::find_if(glbPinDensity.begin(), glbPinDensity.end(), [locIndex](const std::pair<int, int>& p) {
+        return p.first == locIndex;
+    });
+
+
     // 计算新和
-    double potentialSum = 0.0;
-    for (const auto& val : topKcopy) {
-        potentialSum += val;
+    int potentialSum = 0;
+    int i = 0;
+    for(auto& it : glbPinDensity){
+        if(i >= glbTopKNum){
+            break;
+        }
+        potentialSum += it.second;
+        i++;
     }
-    const double eps = 1e-6;
-    if (int(potentialSum*10000) > int(glbInitTopSum*10000)+1) {
-        //不做修改
+    
+    if (potentialSum > glbInitTopSum) {
+        //复原
+        itOrigin->second = oldOriginLocPD;
+        it->second = oldLocPD;
         return false;
     }
     else{
         //应用修改
-        glbTopK = topKcopy;
-        glbPinDensityMap[originLocIndex] = newOriginLocPD;
-        glbPinDensityMap[locIndex] = newLocPD;
         return true;
     }
 }
@@ -941,7 +964,6 @@ int arbsa(bool isBaseline, std::string nodesFile){
         // 排序fitness列表
         sortedFitness(fitnessVec);
     }
-
     //记录截止次数
     writeJsonFile(filename, jsonData);
     

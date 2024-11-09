@@ -11,3 +11,4 @@ getFlameGraph.sh
 *tar.gz
 analysis
 *.json
+*.csv

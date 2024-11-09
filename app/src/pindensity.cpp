@@ -2,6 +2,7 @@
 #include "global.h"
 #include "object.h"
 #include "pindensity.h"
+#include <fstream>
 
 bool reportPinDensity() {  
   int checkedTileCnt = 0;
@@ -146,56 +147,47 @@ void setPinDensityMapAndTopValues(){
               continue;
             }
 
-            // baseline
+            // baseline 
             int numInterTileConn = tile->getConnectedLutSeqInput(true).size() + tile->getConnectedLutSeqOutput(true).size();          
-            double ratio = (double)(numInterTileConn) / (MAX_TILE_PIN_INPUT_COUNT + MAX_TILE_PIN_OUTPUT_COUNT);
+            // double ratio = (double)(numInterTileConn) / (MAX_TILE_PIN_INPUT_COUNT + MAX_TILE_PIN_OUTPUT_COUNT);
             int loc = i*1000+j; //x与y组成一个int
-            glbPinDensityMap[loc] = ratio;
+            glbPinDensity.emplace_back(std::make_pair(loc, numInterTileConn));
             checkedTileCnt++;
         }
     }
     glbTopKNum = checkedTileCnt * 0.05;
-    //设置 glbTopK
-    for(const auto& it : glbPinDensityMap){
-        double ratio = it.second;
-        glbTopK.insert(ratio);
-        if(glbTopK.size() > glbTopKNum){
-           glbTopK.erase(glbTopK.begin());
+    //排序
+    std::sort(glbPinDensity.begin(), glbPinDensity.end(), [](const std::pair<int, int>& a, const std::pair<int, int>& b) {
+        return a.second > b.second; // 按值降序排序
+    });
+    //计算初始top5的Conn和
+    int sum = 0;
+    int i = 0;
+    for(auto& it : glbPinDensity){
+        if(i >= glbTopKNum){
+            break;
         }
-    }
-    double sum = 0.0;
-    for(const double& i : glbTopK){
-        sum += i;
+        sum += it.second;
+        i++;
     }
     glbInitTopSum = sum;
+
 }
 
-//更新全局密度map
-void updatePinDensityMapAndTopValues(){
-    // 1) baseline
-    for (int i = 0; i < chip.getNumCol(); i++) {
-        for (int j = 0; j < chip.getNumRow(); j++) {
-            Tile* tile = chip.getTile(i, j);
-            if (tile->matchType("PLB") == false) {
-                continue;        
-            }
-            if (tile->isEmpty(true)) {  // baseline
-              continue;
-            }
-            // baseline
-            int numInterTileConn = tile->getConnectedLutSeqInput(true).size() + tile->getConnectedLutSeqOutput(true).size();          
-            double ratio = (double)(numInterTileConn) / (MAX_TILE_PIN_INPUT_COUNT + MAX_TILE_PIN_OUTPUT_COUNT);
-            int loc = i*1000+j; //x与y组成一个int
-            glbPinDensityMap[loc] = ratio;
-        }
-    }
-}
-
-//只能获取baseline的  根据x y 获取pin密度
-double getPinDensityByXY(int x, int y){
+//只能获取baseline的  根据x y 获取pin密度的分子
+int getPinDensityByXY(int x, int y){
+    int numInterTileConn = 0;
     Tile* tile = chip.getTile(x, y);
+    if (tile->matchType("PLB") == false) {
+        return 0;       
+    }
+    if (tile->isEmpty(true)) {  // baseline
+        return 0;
+    }
     // baseline
-    int numInterTileConn = tile->getConnectedLutSeqInput(true).size() + tile->getConnectedLutSeqOutput(true).size();          
-    double ratio = (double)(numInterTileConn) / (MAX_TILE_PIN_INPUT_COUNT + MAX_TILE_PIN_OUTPUT_COUNT);
-    return ratio;
+    numInterTileConn = tile->getConnectedLutSeqInput(true).size() + tile->getConnectedLutSeqOutput(true).size();          
+    return numInterTileConn;
 }
+
+
+

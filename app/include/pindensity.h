@@ -4,6 +4,8 @@ bool reportPinDensity();
 
 void setPinDensityMapAndTopValues();
 
-void updatePinDensityMapAndTopValues();
+int getPinDensityByXY(int x, int y); //根据x y 获取pin密度分子
 
-double getPinDensityByXY(int x, int y); //根据x y 获取pin密度
+void judgePinDensityMap();
+
+void updatePinDensityMapAndTopValues();

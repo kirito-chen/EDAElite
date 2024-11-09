@@ -13,7 +13,6 @@ std::set<int> glbBigNet; //存储引脚数过大的netid
 int glbBigNetPinNum = 0;  //bigNet的引脚和 默认为0
 
 /****密度相关****/
-std::multiset<double> glbTopK; //存储前百分之5的pinDensity值 setPinDensityMapAndTopValues
-std::map<int, double> glbPinDensityMap; //存储tile的pinDensity  key: x*1000+y  value： ratio setPinDensityMapAndTopValues
+std::vector<std::pair<int,int> > glbPinDensity; //第一个是tile x*1000+y 第二个是密度的分子
 int glbTopKNum;  //统计PLB的5%数量   setPinDensityMapAndTopValues
-double glbInitTopSum; //初始时前5%的pin密度之和 setPinDensityMapAndTopValues
+int glbInitTopSum; //记录初始top的分子之和
