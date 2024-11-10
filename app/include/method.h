@@ -39,8 +39,8 @@ void printInstanceInformation();
 // std::tuple<int, int> getNeighborTile(int x, int y);
 int calculateTwoInstanceWireLength(Instance* inst1, Instance* inst2, bool isBaseLine);
 std::tuple<int, int> getNeighborTile(int x, int y, bool isLeft = true);
-void initialGlbPackInstMap();
+void initialGlbPackInstMap(bool isSeqPack);
 void initialGlbPackNetMap();
-void recoverAllMap();
+void recoverAllMap(bool isSeqPack);
 
 

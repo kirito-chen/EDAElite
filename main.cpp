@@ -84,15 +84,16 @@ int main(int argc, char *argv[])
 
     //基于baseline修改
     bool isBaseline = false;
-    readOutputNetlist(nodesFile);
+    bool isSeqPack = false;
+    // readOutputNetlist(nodesFile);
 
     reportDesignStatistics();
 
-    // readOutputNetlist(outFile);
-    // legalCheck();
-    // reportWirelength();
+    readOutputNetlist(outFile);
+    legalCheck();
+    reportWirelength();
 
-    matchLUTPairs(glbInstMap, true, true);  // 打包代码
+    matchLUTPairs(glbInstMap, true, isSeqPack);  // 打包代码
     printInstanceInformation();
     //生成结果
     // generateOutputFile(isBaseline, outFile);
@@ -100,7 +101,7 @@ int main(int argc, char *argv[])
     reportWirelength();
     
     // 模拟退火
-    newArbsa(isBaseline);
+    newArbsa(isBaseline, isSeqPack);
 
 
     //生成结果
@@ -117,19 +118,20 @@ int main(int argc, char *argv[])
     //         FM();
     //     }
     // }
+    
     // free memory before exit
-    for (auto &lib : glbLibMap)
-    {
-        delete lib.second;
-    }
-    for (auto &inst : glbInstMap)
-    {
-        delete inst.second;
-    }
-    for (auto &net : glbNetMap)
-    {
-        delete net.second;
-    }
+    // for (auto &lib : glbLibMap)
+    // {
+    //     delete lib.second;
+    // }
+    // for (auto &inst : glbInstMap)
+    // {
+    //     delete inst.second;
+    // }
+    // for (auto &net : glbNetMap)
+    // {
+    //     delete net.second;
+    // }
     
     return 0;
 }

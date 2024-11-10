@@ -565,12 +565,16 @@ void matchLUTPairsThread(std::map<int, Instance *> &glbInstMap, std::vector<int>
                 std::unordered_set<int> unionPins = unionSets(currentLUTNets, otherLUTNets);
                 int totalInpins = unionPins.size();
 
-                // if (sharedNetCount > maxSharedNets && totalInpins == inputPinNum && currentLUTNets.size() == otherLUTNets.size())
-                if (sharedNetCount > maxSharedNets && totalInpins <= 6)
+                if (sharedNetCount > maxSharedNets && totalInpins == inputPinNum && currentLUTNets.size() == otherLUTNets.size())
                 {
                     maxSharedNets = sharedNetCount;
                     bestMatchedLUTID = otherLUTID;
                 }
+                // if (sharedNetCount > maxSharedNets && totalInpins <= 6)
+                // {
+                //     maxSharedNets = sharedNetCount;
+                //     bestMatchedLUTID = otherLUTID;
+                // }
             }
         }
 
@@ -674,7 +678,7 @@ void matchLUTPairs(std::map<int, Instance *> &glbInstMap, bool isLutPack, bool i
         updateSEQLocations(seqPlacementMap);
     }
     updateInstancesToTiles(isSeqPack); // 根据打包情况生成新的初始布局
-    initialGlbPackInstMap();           // 初始化 glbPackInstMap
+    initialGlbPackInstMap(isSeqPack);  // 初始化 glbPackInstMap
     initialGlbPackNetMap();
 }
 
@@ -1586,7 +1590,10 @@ bool updateInstancesToTiles(bool isSeqPack)
         {
             Tile *tile = chip.getTile(i, j);
             tile->clearLUTOptimizedInstances(); // 清理 LUT 类型的实例
-            tile->clearSEQOptimizedInstances(); // 清理 LUT 类型的实例
+            if (isSeqPack)
+            {
+                tile->clearSEQOptimizedInstances(); // 清理 LUT 类型的实例
+            }
         }
     }
 
@@ -1983,6 +1990,8 @@ void printInstanceInformation()
         std::cout << "LUT组数目 : " << lutGroups.size() << std::endl;
         std::cout << "seq组的数目 : " << seqPlacementMap.size() << std::endl;
         std::cout << "glbPackInstMap 数目 : " << glbPackInstMap.size() << std::endl;
+        std::cout << "glbPackNetMap 数目 : " << glbPackNetMap.size() << std::endl;
+        std::cout << "glbNetMap 数目 : " << glbNetMap.size() << std::endl;
         std::cout << lineBreaker << std::endl;
     }
 
@@ -2121,7 +2130,7 @@ int calculateTwoInstanceWireLength(Instance *inst1, Instance *inst2, bool isBase
 }
 
 // 初始化 glbPackInstMap , 在完成LUT与SEQ的打包之后
-void initialGlbPackInstMap()
+void initialGlbPackInstMap(bool isSeqPack)
 {
     for (auto &entry : glbInstMap)
     {
@@ -2148,34 +2157,38 @@ void initialGlbPackInstMap()
             }
             continue;
         }
-        if (instance->getModelName().substr(0, 3) == "SEQ" && !instance->isMapMatched())
+        if (isSeqPack)
         {
-            glbPackInstMap.insert(std::make_pair(glbPackInstMap.size(), instance));
+            if (instance->getModelName().substr(0, 3) == "SEQ" && !instance->isMapMatched())
+            {
+                glbPackInstMap.insert(std::make_pair(glbPackInstMap.size(), instance));
 
-            int seqGroupID = instance->getSEQID();
-            if (!seqPlacementMap.empty())
-            {
-                std::vector<Instance *> seqVec = seqPlacementMap[seqGroupID].getSEQInstances();
-                for (auto &seq_instance : seqVec)
+                int seqGroupID = instance->getSEQID();
+                if (!seqPlacementMap.empty())
                 {
-                    // 检查指针是否为空，以防止空指针访问
-                    if (seq_instance)
+                    std::vector<Instance *> seqVec = seqPlacementMap[seqGroupID].getSEQInstances();
+                    for (auto &seq_instance : seqVec)
                     {
-                        // 对 instance 进行所需的修改
-                        seq_instance->setMapMatched(true);
-                        instance->addMapInstID(seq_instance->getInstID());
-                        instance->unionInputPins(seq_instance->getInpins());
-                        instance->unionOutputPins(seq_instance->getOutpins());
+                        // 检查指针是否为空，以防止空指针访问
+                        if (seq_instance)
+                        {
+                            // 对 instance 进行所需的修改
+                            seq_instance->setMapMatched(true);
+                            instance->addMapInstID(seq_instance->getInstID());
+                            instance->unionInputPins(seq_instance->getInpins());
+                            instance->unionOutputPins(seq_instance->getOutpins());
+                        }
                     }
+                    continue;
                 }
-                continue;
-            }
-            else
-            {
-                instance->setMapMatched(true);
-                instance->addMapInstID(instance->getInstID());
+                else
+                {
+                    instance->setMapMatched(true);
+                    instance->addMapInstID(instance->getInstID());
+                }
             }
         }
+
         if (!instance->isMapMatched())
         {
 
@@ -2223,7 +2236,7 @@ void initialGlbPackNetMap()
 }
 
 // 还原最终结果映射
-void recoverAllMap()
+void recoverAllMap(bool isSeqPack)
 {
     std::cout << "还原所有映射" << std::endl;
     for (auto inst : glbPackInstMap)
@@ -2234,21 +2247,32 @@ void recoverAllMap()
         int y = std::get<1>(location);
         int z = std::get<2>(location);
 
-        if (instance->getModelName().substr(0, 3) == "SEQ")
+        if (isSeqPack)
         {
-            auto instVec = instance->getMapInstID();
-            if (z == 0)
+            if (instance->getModelName().substr(0, 3) == "SEQ")
             {
-                for (int i = 0; i < instVec.size(); i++)
+                auto instVec = instance->getMapInstID();
+                if (z == 0)
                 {
-                    glbInstMap[instVec[i]]->setLocation(std::make_tuple(x, y, i));
+                    for (int i = 0; i < instVec.size(); i++)
+                    {
+                        glbInstMap[instVec[i]]->setLocation(std::make_tuple(x, y, i));
+                    }
+                }
+                if (z == 1)
+                {
+                    for (int i = 0; i < instVec.size(); i++)
+                    {
+                        glbInstMap[instVec[i]]->setLocation(std::make_tuple(x, y, i + 8));
+                    }
                 }
             }
-            if (z == 1)
+            else
             {
+                auto instVec = instance->getMapInstID();
                 for (int i = 0; i < instVec.size(); i++)
                 {
-                    glbInstMap[instVec[i]]->setLocation(std::make_tuple(x, y, i + 8));
+                    glbInstMap[instVec[i]]->setLocation(location);
                 }
             }
         }

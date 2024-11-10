@@ -1108,7 +1108,7 @@ int arbsa(bool isBaseline)
 }
 
 // 粗化使用
-int newArbsa(bool isBaseline)
+int newArbsa(bool isBaseline, bool isSeqPack)
 {
     // 记录开始时间
     auto start = std::chrono::high_resolution_clock::now();
@@ -1140,7 +1140,7 @@ int newArbsa(bool isBaseline)
     float T = 2;
     float threashhold = 0;    // 1e-5
     float alpha = 0.8;        // 0.8-0.99
-    const int timeLimit = 1180; // 1180  3580
+    const int timeLimit = 120; // 1180  3580
     // 计算初始cost
     int cost = 0, costNew = 0;
     // int cost1 = getWirelength(isBaseline);
@@ -1168,7 +1168,7 @@ int newArbsa(bool isBaseline)
         int centerX, centerY;
         std::tie(centerX, centerY) = getNetCenter(isBaseline, net);
         int x, y, z;
-        std::tie(x, y, z) = findPackSuitableLoc(isBaseline, centerX, centerY, rangeDesiredMap[netId], inst);
+        std::tie(x, y, z) = findPackSuitableLoc(isBaseline, centerX, centerY, rangeDesiredMap[netId], inst, isSeqPack);
         if (z == -1)
         {
             // 没找到合适位置
@@ -1297,7 +1297,7 @@ int newArbsa(bool isBaseline)
             std::tie(centerX, centerY) = getNetCenter(isBaseline, net);
             // 在 rangeDesired 范围内选取一个位置去放置这个inst
             int x, y, z;
-            std::tie(x, y, z) = findPackSuitableLoc(isBaseline, centerX, centerY, rangeDesiredMap[netId], inst);
+            std::tie(x, y, z) = findPackSuitableLoc(isBaseline, centerX, centerY, rangeDesiredMap[netId], inst, isSeqPack);
             if (z == -1)
             {
                 // 没找到合适位置
@@ -1381,21 +1381,21 @@ int newArbsa(bool isBaseline)
             {
                 originLoc = inst->getBaseLocation();
                 inst->setBaseLocation(loc);
-                if (inst->getMatchedLUTID() != -1)
-                {
-                    Instance *matchedInst = glbInstMap[inst->getMatchedLUTID()];
-                    matchedInst->setBaseLocation(loc);
-                }
+                // if (inst->getMatchedLUTID() != -1)
+                // {
+                //     Instance *matchedInst = glbInstMap[inst->getMatchedLUTID()];
+                //     matchedInst->setBaseLocation(loc);
+                // }
             }
             else
             {
                 originLoc = inst->getLocation();
                 inst->setLocation(loc);
-                if (inst->getMatchedLUTID() != -1)
-                {
-                    Instance *matchedInst = glbInstMap[inst->getMatchedLUTID()];
-                    matchedInst->setLocation(loc);
-                }
+                // if (inst->getMatchedLUTID() != -1)
+                // {
+                //     Instance *matchedInst = glbInstMap[inst->getMatchedLUTID()];
+                //     matchedInst->setLocation(loc);
+                // }
             }
             int afterNetWL = getRelatedWirelength(isBaseline, instRelatedNetId);
             int costNew = cost - beforeNetWL + afterNetWL;
@@ -1408,7 +1408,7 @@ int newArbsa(bool isBaseline)
             // if deta < 0 更新这个操作到布局中，更新fitness列表
             if (deta < 0)
             {
-                changePackTile(isBaseline, originLoc, loc, inst);
+                changePackTile(isBaseline, originLoc, loc, inst, isSeqPack);
                 // 间隔次数多了再更新这两
                 // calculRelatedRangeMap(isBaseline, rangeActualMap, instRelatedNetId);
                 // calculRelatedFitness(fitnessVec, rangeDesiredMap, rangeActualMap, instRelatedNetId);
@@ -1427,7 +1427,7 @@ int newArbsa(bool isBaseline)
 #endif
                 if (randomValue < eDetaT)
                 {
-                    changePackTile(isBaseline, originLoc, loc, inst);
+                    changePackTile(isBaseline, originLoc, loc, inst, isSeqPack);
                     // 间隔次数多了再更新这两
                     // calculRelatedRangeMap(isBaseline, rangeActualMap, instRelatedNetId);
                     // calculRelatedFitness(fitnessVec, rangeDesiredMap, rangeActualMap, instRelatedNetId);
@@ -1439,20 +1439,20 @@ int newArbsa(bool isBaseline)
                     if (isBaseline)
                     {
                         inst->setBaseLocation(originLoc);
-                        if (inst->getMatchedLUTID() != -1)
-                        {
-                            Instance *matchedInst = glbInstMap[inst->getMatchedLUTID()];
-                            matchedInst->setBaseLocation(originLoc);
-                        }
+                        // if (inst->getMatchedLUTID() != -1)
+                        // {
+                        //     Instance *matchedInst = glbInstMap[inst->getMatchedLUTID()];
+                        //     matchedInst->setBaseLocation(originLoc);
+                        // }
                     }
                     else
                     {
                         inst->setLocation(originLoc);
-                        if (inst->getMatchedLUTID() != -1)
-                        {
-                            Instance *matchedInst = glbInstMap[inst->getMatchedLUTID()];
-                            matchedInst->setLocation(originLoc);
-                        }
+                        // if (inst->getMatchedLUTID() != -1)
+                        // {
+                        //     Instance *matchedInst = glbInstMap[inst->getMatchedLUTID()];
+                        //     matchedInst->setLocation(originLoc);
+                        // }
                     }
                 }
             }
@@ -1509,12 +1509,12 @@ int newArbsa(bool isBaseline)
     std::cout << "runtime: " << duration.count() << " s" << std::endl;
 
     // 还原最终结果映射
-    recoverAllMap();
+    recoverAllMap(isSeqPack);
 
     return 0;
 }
 
-bool isPackValid(bool isBaseline, int x, int y, int &z, Instance *inst)
+bool isPackValid(bool isBaseline, int x, int y, int &z, Instance *inst, bool isSeqPack)
 { // 判断这个位置是否可插入该inst，如果可插入则返回z值
     bool valid = false;
     Tile *tile = chip.getTile(x, y);
@@ -1623,7 +1623,40 @@ bool isPackValid(bool isBaseline, int x, int y, int &z, Instance *inst)
             {
                 instances = slot->getOptimizedInstances();
             }
-            if (instances.size() <= 1)
+
+            if (instances.size() == 1)
+            {
+                Instance *instanceTmp = glbInstMap[instances.front()];
+                int inttmp = instanceTmp->getMapInstID().size();
+
+                if (inttmp == 2)
+                {
+                    int a = 0;
+                    continue;
+                }                
+
+                // 大于1个lut，不可放入了
+                instances.push_back(instId); // 添加当前instId
+                std::set<int> totalInputs;
+                for (auto instID : instances)
+                {
+                    Instance *instPtr = glbInstMap.find(instID)->second;
+                    std::vector<Pin *> inpins = instPtr->getInpins();
+                    for (auto pin : inpins)
+                    {
+                        if (pin->getNetID() != -1)
+                        {
+                            totalInputs.insert(pin->getNetID());
+                        }
+                    }
+                }
+                if (totalInputs.size() <= 6)
+                {
+                    // 符合条件 记录
+                    record.emplace_back(std::make_pair(idx, totalInputs.size()));
+                }
+            }
+            if (instances.size() == 0)
             {
                 // 大于1个lut，不可放入了
                 instances.push_back(instId); // 添加当前instId
@@ -1654,47 +1687,143 @@ bool isPackValid(bool isBaseline, int x, int y, int &z, Instance *inst)
                       {
                           return a.second > b.second; // 使用 > 实现降序
                       });
+            if (z > 8)
+            {
+                int a = 0;
+            }
+
             z = record[0].first;
             return true;
         }
     }
-    else if (inst->getModelName() == "SEQ")
-    { // LUT可以不用改，SEQ需要大改，现在的SEQ为一个bank组，所以返回的应该是bank的位置，0或1，只需要检查是否有空余 bank 就行
-        slotArr seqSlotArr = *(tile->getInstanceByType("SEQ"));
-        bool zeroFlag = true;
-        bool oneFlag = true;
-        for (int i = 0; i < 15; i++)
-        {
-            Slot *slot = seqSlotArr[i];
-            if (slot->getOptimizedInstances().size() != 0 && i < 8)
+    if (isSeqPack)
+    {
+        if (inst->getModelName() == "SEQ")
+        { // LUT可以不用改，SEQ需要大改，现在的SEQ为一个bank组，所以返回的应该是bank的位置，0或1，只需要检查是否有空余 bank 就行
+            slotArr seqSlotArr = *(tile->getInstanceByType("SEQ"));
+            bool zeroFlag = true;
+            bool oneFlag = true;
+            for (int i = 0; i < 15; i++)
             {
-                zeroFlag = false;
+                Slot *slot = seqSlotArr[i];
+                if (slot->getOptimizedInstances().size() != 0 && i < 8)
+                {
+                    zeroFlag = false;
+                }
+                if (slot->getOptimizedInstances().size() != 0 && i >= 8)
+                {
+                    oneFlag = false;
+                }
             }
-            if (slot->getOptimizedInstances().size() != 0 && i >= 8)
+            if (zeroFlag)
             {
-                oneFlag = false;
+                z = 0;
+                valid = true;
+            }
+            if (!zeroFlag && oneFlag)
+            {
+                z = 1;
+                valid = true;
+            }
+            if (!zeroFlag && !oneFlag)
+            {
+                valid = false;
             }
         }
-        if (zeroFlag)
+    }
+    else
+    {
+        if (inst->getModelName() == "SEQ")
         {
-            z = 0;
-            valid = true;
-        }
-        if (!zeroFlag && oneFlag)
-        {
-            z = 1;
-            valid = true;
-        }
-        if (!zeroFlag && !oneFlag)
-        {
-            valid = false;
+            slotArr seqSlotArr = *(tile->getInstanceByType("SEQ"));
+            for (int bank = 0; bank < 2; bank++)
+            {
+                // bank0 0-8   bank1 8-16
+                int start = bank * 8;
+                int end = (bank + 1) * 8;
+                std::set<int> instIdSet;
+                instIdSet.insert(instId); // 添加当前Id
+                for (int i = start; i < end; i++)
+                {
+                    Slot *slot = seqSlotArr[i];
+                    std::list<int> instList;
+                    if (isBaseline)
+                        instList = slot->getBaselineInstances();
+                    else
+                        instList = slot->getOptimizedInstances();
+                    for (int id : instList)
+                    {
+                        instIdSet.insert(id);
+                    }
+                }
+                // 判断每个inst的引脚
+                std::set<int> clkNets; // 不超过1
+                std::set<int> ceNets;  // 不超过2
+                std::set<int> srNets;  // 不超过1
+                for (int i : instIdSet)
+                {
+                    Instance *instPtr = glbInstMap[i];
+                    int numInpins = instPtr->getNumInpins();
+                    for (int i = 0; i < numInpins; i++)
+                    {
+                        // 只判断input是否是这几个量
+                        Pin *pin = instPtr->getInpin(i);
+                        int netID = pin->getNetID();
+                        if (netID >= 0)
+                        {
+                            PinProp prop = pin->getProp();
+                            if (prop == PIN_PROP_CE)
+                            {
+                                ceNets.insert(netID);
+                            }
+                            else if (prop == PIN_PROP_CLOCK)
+                            {
+                                clkNets.insert(netID);
+                            }
+                            else if (prop == PIN_PROP_RESET)
+                            {
+                                srNets.insert(netID);
+                            }
+                        }
+                    }
+                }
+
+                int numClk = clkNets.size();
+                int numReset = srNets.size();
+                int numCe = ceNets.size();
+
+                if (numClk > MAX_TILE_CLOCK_PER_PLB_BANK || numCe > MAX_TILE_CE_PER_PLB_BANK || numReset > MAX_TILE_RESET_PER_PLB_BANK)
+                {
+                    // 该bank放入该inst时违反约束
+                    valid = false;
+                }
+                else
+                {
+                    // SEQ只要返回一个空位子即可
+                    // slotArr seqSlotArr = *(tile->getInstanceByType("SEQ"));
+                    for (int i = start; i < end; i++)
+                    {
+                        Slot *slot = seqSlotArr[i];
+                        std::list<int> listTmp;
+                        if (isBaseline)
+                            listTmp = slot->getBaselineInstances();
+                        else
+                            listTmp = slot->getOptimizedInstances();
+                        if (listTmp.size() == 0)
+                        {
+                            z = i;
+                            return true;
+                        }
+                    }
+                }
+            }
         }
     }
 
     return valid;
 }
 
-std::tuple<int, int, int> findPackSuitableLoc(bool isBaseline, int x, int y, int rangeDesired, Instance *inst)
+std::tuple<int, int, int> findPackSuitableLoc(bool isBaseline, int x, int y, int rangeDesired, Instance *inst, bool isSeqPack)
 {
 
     // 定义矩形框的左下角和右上角
@@ -1751,7 +1880,7 @@ std::tuple<int, int, int> findPackSuitableLoc(bool isBaseline, int x, int y, int
             continue;
         }
         // 检查坐标是否符合规则
-        if (isPackValid(isBaseline, xx, yy, zz, inst))
+        if (isPackValid(isBaseline, xx, yy, zz, inst, isSeqPack))
         {
             break;
         }
@@ -1768,7 +1897,7 @@ std::tuple<int, int, int> findPackSuitableLoc(bool isBaseline, int x, int y, int
 }
 
 // 修改slot队列
-int changePackTile(bool isBaseline, std::tuple<int, int, int> originLoc, std::tuple<int, int, int> loc, Instance *inst)
+int changePackTile(bool isBaseline, std::tuple<int, int, int> originLoc, std::tuple<int, int, int> loc, Instance *inst, bool isSeqPack)
 {
     int xCur, yCur, zCur, xGoal, yGoal, zGoal;
     std::tie(xCur, yCur, zCur) = originLoc;
@@ -1788,16 +1917,6 @@ int changePackTile(bool isBaseline, std::tuple<int, int, int> originLoc, std::tu
         // 添加到新的tile
         tileGoal->addInstance(instId, zGoal, inst->getModelName(), isBaseline);
         // tileGoal->addInstance(inst->getMatchedLUTID(), zGoal, inst->getModelName(), isBaseline);
-    }
-    if (inst->getMatchedLUTID() != -1 && (inst->getModelName()).substr(0, 3) == "LUT")
-    {
-        if (isBaseline)
-            slot->clearBaselineInstances();
-        else
-            slot->clearOptimizedInstances();
-        // 添加到新的tile
-        tileGoal->addInstance(instId, zGoal, inst->getModelName(), isBaseline);
-        tileGoal->addInstance(inst->getMatchedLUTID(), zGoal, inst->getModelName(), isBaseline);
     }
     if (inst->getMatchedLUTID() == -1 && (inst->getModelName()).substr(0, 3) == "LUT")
     {
@@ -1828,46 +1947,79 @@ int changePackTile(bool isBaseline, std::tuple<int, int, int> originLoc, std::tu
         // 在新的插槽中插入
         tileGoal->addInstance(instId, zGoal, inst->getModelName(), isBaseline);
     }
+
     if ((inst->getModelName()).substr(0, 3) == "SEQ")
     {
-        if (isBaseline)
+        if (isSeqPack)
         {
-            std::list<int> &instances = slot->getBaselineInstances();
-            for (int instIdTmp : instances)
+            if (isBaseline)
             {
-                if (instId == instIdTmp)
+                std::list<int> &instances = slot->getBaselineInstances();
+                for (int instIdTmp : instances)
                 {
-                    instances.remove(instIdTmp);
-                    break;
+                    if (instId == instIdTmp)
+                    {
+                        instances.remove(instIdTmp);
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                std::list<int> &instances = slot->getOptimizedInstancesRef();
+                for (int instIdTmp : instances)
+                {
+                    if (instId == instIdTmp)
+                    {
+                        instances.remove(instIdTmp);
+                        break;
+                    }
+                }
+            }
+            // 在新的插槽中插入
+            if (zGoal == 0)
+            {
+                for (size_t i = 0; i < inst->getMapInstID().size(); i++)
+                {
+                    tileGoal->addInstance(inst->getMapInstID()[i], i, inst->getModelName(), isBaseline);
+                }
+            }
+            if (zGoal == 1)
+            {
+                for (size_t i = 0; i < inst->getMapInstID().size(); i++)
+                {
+                    tileGoal->addInstance(inst->getMapInstID()[i], i + 8, inst->getModelName(), isBaseline);
                 }
             }
         }
         else
         {
-            std::list<int> &instances = slot->getOptimizedInstancesRef();
-            for (int instIdTmp : instances)
+            if (isBaseline)
             {
-                if (instId == instIdTmp)
+                std::list<int> &instances = slot->getBaselineInstances();
+                for (int instIdTmp : instances)
                 {
-                    instances.remove(instIdTmp);
-                    break;
+                    if (instId == instIdTmp)
+                    {
+                        instances.remove(instIdTmp);
+                        break;
+                    }
                 }
             }
-        }
-        // 在新的插槽中插入
-        if (zGoal == 0)
-        {
-            for (size_t i = 0; i < inst->getMapInstID().size(); i++)
+            else
             {
-                tileGoal->addInstance(inst->getMapInstID()[i], i, inst->getModelName(), isBaseline);
+                std::list<int> &instances = slot->getOptimizedInstancesRef();
+                for (int instIdTmp : instances)
+                {
+                    if (instId == instIdTmp)
+                    {
+                        instances.remove(instIdTmp);
+                        break;
+                    }
+                }
             }
-        }
-        if (zGoal == 1)
-        {
-            for (size_t i = 0; i < inst->getMapInstID().size(); i++)
-            {
-                tileGoal->addInstance(inst->getMapInstID()[i], i + 8, inst->getModelName(), isBaseline);
-            }
+            // 在新的插槽中插入
+            tileGoal->addInstance(instId, zGoal, inst->getModelName(), isBaseline);
         }
     }
 
