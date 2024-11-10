@@ -1140,7 +1140,7 @@ int newArbsa(bool isBaseline, bool isSeqPack)
     float T = 2;
     float threashhold = 0;    // 1e-5
     float alpha = 0.8;        // 0.8-0.99
-    const int timeLimit = 120; // 1180  3580
+    const int timeLimit = 1180; // 1180  3580
     // 计算初始cost
     int cost = 0, costNew = 0;
     // int cost1 = getWirelength(isBaseline);
@@ -1196,7 +1196,7 @@ int newArbsa(bool isBaseline, bool isSeqPack)
         std::tuple<int, int, int> loc = std::make_tuple(x, y, z);
         std::tuple<int, int, int> originLoc;
         // 保存更新前的部分net
-        int beforeNetWL = getRelatedWirelength(isBaseline, instRelatedNetId);
+        int beforeNetWL = getPackRelatedWirelength(isBaseline, instRelatedNetId);
         if (isBaseline)
         {
             originLoc = inst->getBaseLocation();
@@ -1207,7 +1207,7 @@ int newArbsa(bool isBaseline, bool isSeqPack)
             originLoc = inst->getLocation();
             inst->setLocation(loc);
         }
-        int afterNetWL = getRelatedWirelength(isBaseline, instRelatedNetId);
+        int afterNetWL = getPackRelatedWirelength(isBaseline, instRelatedNetId);
         int costNew = cost - beforeNetWL + afterNetWL;
         if (costNew < cost)
         {
@@ -1376,7 +1376,7 @@ int newArbsa(bool isBaseline, bool isSeqPack)
             std::tuple<int, int, int> loc = std::make_tuple(x, y, z);
             std::tuple<int, int, int> originLoc;
             // 保存更新前的部分net
-            int beforeNetWL = getRelatedWirelength(isBaseline, instRelatedNetId);
+            int beforeNetWL = getPackRelatedWirelength(isBaseline, instRelatedNetId);
             if (isBaseline)
             {
                 originLoc = inst->getBaseLocation();
@@ -1391,13 +1391,14 @@ int newArbsa(bool isBaseline, bool isSeqPack)
             {
                 originLoc = inst->getLocation();
                 inst->setLocation(loc);
-                // if (inst->getMatchedLUTID() != -1)
-                // {
-                //     Instance *matchedInst = glbInstMap[inst->getMatchedLUTID()];
-                //     matchedInst->setLocation(loc);
-                // }
+                if (inst->getMatchedLUTID() != -1)
+                {
+                    int a = 0;
+                    // Instance *matchedInst = glbInstMap[inst->getMatchedLUTID()];
+                    // matchedInst->setLocation(loc);
+                }
             }
-            int afterNetWL = getRelatedWirelength(isBaseline, instRelatedNetId);
+            int afterNetWL = getPackRelatedWirelength(isBaseline, instRelatedNetId);
             int costNew = cost - beforeNetWL + afterNetWL;
             // costNew = getHPWL(isBaseline);
             // deta = new_cost - cost

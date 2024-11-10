@@ -503,7 +503,7 @@ void matchLUTPairsThread(std::map<int, Instance *> &glbInstMap, std::vector<int>
                          std::unordered_map<int, std::unordered_set<int>> &lutNetMap,
                          std::unordered_map<int, std::unordered_set<int>> &netLUTMap, int start, int end)
 {
-    int wireLimit = 2; // 线长限制，默认为2
+    int wireLimit = 10; // 线长限制，默认为2
     while (start < end)
     {
         int bestMatchedLUTID = -1;
@@ -565,16 +565,17 @@ void matchLUTPairsThread(std::map<int, Instance *> &glbInstMap, std::vector<int>
                 std::unordered_set<int> unionPins = unionSets(currentLUTNets, otherLUTNets);
                 int totalInpins = unionPins.size();
 
-                if (sharedNetCount > maxSharedNets && totalInpins == inputPinNum && currentLUTNets.size() == otherLUTNets.size())
-                {
-                    maxSharedNets = sharedNetCount;
-                    bestMatchedLUTID = otherLUTID;
-                }
-                // if (sharedNetCount > maxSharedNets && totalInpins <= 6)
+                // if (sharedNetCount > maxSharedNets && totalInpins == inputPinNum && currentLUTNets.size() == otherLUTNets.size())
                 // {
                 //     maxSharedNets = sharedNetCount;
                 //     bestMatchedLUTID = otherLUTID;
                 // }
+
+                if (sharedNetCount > maxSharedNets && totalInpins <= 6)
+                {
+                    maxSharedNets = sharedNetCount;
+                    bestMatchedLUTID = otherLUTID;
+                }
             }
         }
 

@@ -85,13 +85,13 @@ int main(int argc, char *argv[])
     //基于baseline修改
     bool isBaseline = false;
     bool isSeqPack = false;
-    // readOutputNetlist(nodesFile);
+    readOutputNetlist(nodesFile);
 
     reportDesignStatistics();
 
-    readOutputNetlist(outFile);
-    legalCheck();
-    reportWirelength();
+    // readOutputNetlist(outFile);
+    // legalCheck();
+    // reportWirelength();
 
     matchLUTPairs(glbInstMap, true, isSeqPack);  // 打包代码
     printInstanceInformation();
