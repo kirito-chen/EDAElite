@@ -164,6 +164,7 @@ int getPackRelatedWirelength(bool isBaseline, const std::set<int>& instRelatedNe
       {
         continue;
       }
+      
       totalCritWirelength += net->getCritWireLength(isBaseline);
       totalWirelength += net->getNonCritWireLength(isBaseline);
     }
