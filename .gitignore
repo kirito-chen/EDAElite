@@ -13,3 +13,6 @@ WorkSpace/public/Test
 analysis
 *.csv
 *.json
+analysis
+*.json
+*.csv

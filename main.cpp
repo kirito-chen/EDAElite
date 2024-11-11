@@ -123,8 +123,11 @@ int main(int argc, char *argv[])
     }
     //设置isPLB数组
     setIsPLB();
+    //设置 glbPinDensityMap 和 topValues
+    setPinDensityMapAndTopValues();
+
     // 模拟退火
-    arbsa(isBaseline);
+    arbsa(isBaseline, nodesFile);
 
     for(auto& it : glbInstMap){
         Instance* inst = it.second;

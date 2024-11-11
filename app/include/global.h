@@ -34,3 +34,15 @@ extern std::unordered_map<int, PLBPlacement> plbPlacementMap;
 extern std::unordered_map<int, SEQBankPlacement> seqPlacementMap;
 
 
+
+
+
+extern std::set<int> glbBigNet; //存储引脚数过大的netid 
+extern int glbBigNetPinNum; //bigNet的引脚和 默认为0
+
+/****密度相关****/
+extern std::vector<std::pair<int,int> > glbPinDensity; //第一个是tile x*1000+y 第二个是密度的分子
+extern int glbTopKNum;  //统计PLB的5%数量   setPinDensityMapAndTopValues
+extern int glbInitTopSum; //记录初始top的分子之和
+
+

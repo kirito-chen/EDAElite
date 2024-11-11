@@ -19,8 +19,9 @@ if [ -n "$1" ]; then
 else
     # 清空Result文件夹
     rm -f Result/*
+    rm data.json
     # 循环从 1 到 11
-    for i in {1..11}
+    for i in {6..8}
     do
         # 构造文件名
         echo ready to run case${i}

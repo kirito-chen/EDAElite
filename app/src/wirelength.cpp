@@ -110,7 +110,7 @@ int getHPWL(bool isBaseline){
     locXSet.insert(x);
     locYSet.insert(y);
     //outpin
-    std::list<Pin*> outputPin = net->getOutputPins();
+    std::list<Pin*>& outputPin = net->getOutputPins();
     for(auto pin : outputPin){
       Instance* inst = pin->getInstanceOwner();
       if(isBaseline){

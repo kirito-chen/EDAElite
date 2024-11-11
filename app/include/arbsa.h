@@ -6,7 +6,7 @@
 #include "arch.h"
 #include "method.h"
 
-int arbsa(bool isBaseline); 
+int arbsa(bool isBaseline,  std::string nodesFile); 
 
 int arbsaMtx(bool isBaseline); //多线程版本
 std::tuple<int, int, int> findSuitableLocForLutSet(bool isBaseline, int x, int y, int rangeDesired, Instance *inst);
