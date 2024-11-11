@@ -14,6 +14,7 @@
 // #define DEBUG
 // #define EXTERITER  //是否固定外部循环次数
 // #define INFO  //是否输出每次的迭代信息
+#define TIME_LIMIT 1180
 
 // 全局随机数生成器
 std::mt19937& get_random_engine() {
@@ -659,7 +660,7 @@ int arbsa(bool isBaseline, std::string nodesFile){
     float T = 2;
     float threashhold = 0; //1e-5
     float alpha = 0.8; //0.8-0.99
-    const int timeLimit = 1180; //1180  3580
+    const int timeLimit = TIME_LIMIT; //1180  3580
     // 计算初始cost
     int cost = 0, costNew = 0;
     cost = getWirelength(isBaseline);
@@ -739,7 +740,7 @@ int arbsa(bool isBaseline, std::string nodesFile){
     }
 
     //读取次数  data.json文件
-    int caseNumber = extractNumber(nodesFile);
+    std::string caseName = extractFileName(nodesFile);
     int iterLimit = -1;
     int iterTotal = 0;
     const std::string filename = "data.json";
@@ -748,9 +749,9 @@ int arbsa(bool isBaseline, std::string nodesFile){
 
     if(fileExists(filename)){
         jsonData = readJsonFile(filename);
-        if(jsonData[std::to_string(caseNumber)].find(std::to_string(timeLimit)) != jsonData[std::to_string(caseNumber)].end()){
+        if(jsonData[caseName].find(std::to_string(timeLimit)) != jsonData[caseName].end()){
             //找到了参数
-            iterLimit = jsonData[std::to_string(caseNumber)][std::to_string(timeLimit)];
+            iterLimit = jsonData[caseName][std::to_string(timeLimit)];
         }
     }
 
@@ -819,11 +820,11 @@ int arbsa(bool isBaseline, std::string nodesFile){
                     std::chrono::duration<double> durationtmp = tmp - start;
                     if(durationtmp.count() >= timeLimit){  //1180
                         timeup = true;
-                        if(!jsonData.count(std::to_string(caseNumber))){
+                        if(!jsonData.count(caseName)){
                             std::map<std::string, int> t;
-                            jsonData[std::to_string(caseNumber)] = t;
+                            jsonData[caseName] = t;
                         }
-                        jsonData[std::to_string(caseNumber)][std::to_string(timeLimit)] = iterTotal;
+                        jsonData[caseName][std::to_string(timeLimit)] = iterTotal;
                         break;
                     }
                 }

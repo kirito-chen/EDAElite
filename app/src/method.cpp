@@ -272,16 +272,13 @@ bool findBigNetId(int pinNumLimit){
     return hasBigNet;
 }
 
-//提取node文件的数字
-int extractNumber(const std::string& filePath) {
-    std::regex pattern(R"(case_(\d+)\.nodes)");  // 正则表达式：匹配"case_"后面的数字，直到".nodes"
-    std::smatch match;
-
-    if (std::regex_search(filePath, match, pattern)) {
-        return std::stoi(match[1]);  // 提取并转换为整数
-    } else {
-        throw std::runtime_error("无法从文件名中提取数字");
+//提取node文件名
+std::string extractFileName(const std::string& filePath) {
+    size_t pos = filePath.find_last_of("/\\"); // 查找最后一个路径分隔符的位置
+    if (pos != std::string::npos) {
+        return filePath.substr(pos + 1);       // 返回文件名
     }
+    return filePath;                           // 若没有分隔符，返回整个路径
 }
 
 bool fileExists(const std::string& filePath) {
