@@ -6,6 +6,7 @@
 #include <fstream>
 #include <iostream>
 #include <map>
+#include <future>
 
 #include <thread>
 #include <mutex>
@@ -23,6 +24,8 @@ int generateNewInstanceID()
 std::mutex lutMutex;
 std::unordered_set<int> matchedLUTs; // 存储已匹配的 LUT IDs
 std::mutex seqPlacementMutex;        // 互斥锁保护对 seqPlacementMap 的访问
+std::mutex glbPackNetMapMutex;       // 添加 glbPackNetMapMutex 变量，用于保护 glbPackNetMap 的访问
+std::mutex oldNetIDMutex;       // 用于保护 oldNetID2newNetID 的互斥锁
 
 // LUT组匹配,将剩余未加入LUT组的LUT单独加入新的LUT组——已确定正确
 void populateLUTGroups(std::map<int, Instance *> &glbInstMap)
@@ -682,7 +685,21 @@ void matchLUTPairs(std::map<int, Instance *> &glbInstMap, bool isLutPack, bool i
     }
     updateInstancesToTiles(isSeqPack); // 根据打包情况生成新的初始布局
     initialGlbPackInstMap(isSeqPack);  // 初始化 glbPackInstMap
+
+    // 获取起始时间点
+    auto start = std::chrono::high_resolution_clock::now();
+
+    // 执行要测量的函数
     initialGlbPackNetMap();
+    // initialGlbPackNetMap_multi_thread();
+
+    // 获取结束时间点
+    auto end = std::chrono::high_resolution_clock::now();
+    // 计算耗时（以毫秒为单位）
+    std::chrono::duration<double, std::milli> elapsed = end - start;
+    std::cout << "Execution time: " << elapsed.count() << " ms" << std::endl;
+    std::cout << lineBreaker << std::endl;
+
 }
 
 // PLB打包，将LUT组打包成PLB组
@@ -2288,5 +2305,68 @@ void recoverAllMap(bool isSeqPack)
                 glbInstMap[instVec[i]]->setLocation(location);
             }
         }
+    }
+}
+
+void processNet(int netID, Net* net, int& newNetPackID) {
+    {
+        std::lock_guard<std::mutex> lock(oldNetIDMutex); // 用互斥锁保护 oldNetID2newNetID 的访问
+        oldNetID2newNetID.insert(std::make_pair(netID, newNetPackID));
+    }
+
+    auto currentInPin = net->getInpin();
+    if (currentInPin->getInstanceOwner()->getMapInstID().size() == 0) {
+        return;
+    }
+
+    Pin* newInPin = new Pin(newNetPackID, currentInPin->getProp(), currentInPin->getTimingCritical(), nullptr);
+    newInPin->setInstanceOwner(currentInPin->getInstanceOwner()->getPackInstance());
+
+    Net* newNet = new Net(newNetPackID);
+    newNet->setClock(net->isClock());
+    newNet->setInpin(newInPin);
+
+    for (auto currentOutPin : net->getOutputPins()) {
+        Pin* newOutPin = new Pin(newNetPackID, currentOutPin->getProp(), currentOutPin->getTimingCritical(), nullptr);
+        newOutPin->setInstanceOwner(currentOutPin->getInstanceOwner()->getPackInstance());
+        newNet->addPinIfUnique(newOutPin);
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(glbPackNetMapMutex); // 使用互斥锁保护对 glbPackNetMap 的访问
+        glbPackNetMap.insert(std::make_pair(newNetPackID, newNet));
+        newNetPackID++;
+    }
+}
+
+void initialGlbPackNetMap_multi_thread() {
+    std::cout << " --- 生成新的 glbPackNetMap ---" << std::endl;
+
+    // 获取系统的硬件线程数
+    unsigned int numThreads = std::thread::hardware_concurrency();
+    if (numThreads == 0) numThreads = 8;  // 如果无法检测到核心数，使用 8 作为默认值
+
+    // 使用线程池限制线程数量
+    std::vector<std::future<void>> futures;
+    int newNetPackID = 0;
+
+    for (auto iter : glbNetMap) {
+        int netID = iter.first;
+        Net* net = iter.second;
+
+        // 将任务加入线程池
+        if (futures.size() >= numThreads) {
+            for (auto& f : futures) {
+                f.wait();  // 等待当前的任务完成
+            }
+            futures.clear();
+        }
+
+        futures.push_back(std::async(std::launch::async, processNet, netID, net, std::ref(newNetPackID)));
+    }
+
+    // 等待所有任务完成
+    for (auto& f : futures) {
+        f.wait();
     }
 }

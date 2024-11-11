@@ -42,5 +42,5 @@ std::tuple<int, int> getNeighborTile(int x, int y, bool isLeft = true);
 void initialGlbPackInstMap(bool isSeqPack);
 void initialGlbPackNetMap();
 void recoverAllMap(bool isSeqPack);
-
+void initialGlbPackNetMap_multi_thread();
 
