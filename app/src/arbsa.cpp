@@ -1140,7 +1140,7 @@ int newArbsa(bool isBaseline, bool isSeqPack)
     float T = 2;
     float threashhold = 0;    // 1e-5
     float alpha = 0.8;        // 0.8-0.99
-    const int timeLimit = 280; // 1180  3580
+    const int timeLimit = 1180; // 1180  3580
     // 计算初始cost
     int cost = 0, costNew = 0;
     // int cost1 = getWirelength(isBaseline);

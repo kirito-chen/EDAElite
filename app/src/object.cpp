@@ -1465,6 +1465,7 @@ Instance::Instance()
   lutInitialed = false;
   lutSetID = -1;
   seqGroupID = -1;
+  instID = -1;
 }
 
 bool Instance::isPlaced()

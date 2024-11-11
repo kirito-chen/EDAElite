@@ -298,6 +298,7 @@ class Instance
     std::tuple<int, int, int> location;     // location after optimization
     std::vector<Pin *> inpins;
     std::vector<Pin *> outpins;
+    int instID;
 
     int allRelatedNetHPWL;     // 存取与inst相关的所有net的HPWL之和
     int allRelatedNetHPWLAver; // cjq modify 24.10.20 平均HPWL
@@ -388,9 +389,11 @@ public:
     int getSEQID() { return seqGroupID; }
     int getInstID()
     {
-        size_t underscorePos = instanceName.find('_');                                                        // 找到下划线的位置
-        return (underscorePos != std::string::npos) ? std::stoi(instanceName.substr(underscorePos + 1)) : -1; // 提取并转换
+        // size_t underscorePos = instanceName.find('_');                                                        // 找到下划线的位置
+        // return (underscorePos != std::string::npos) ? std::stoi(instanceName.substr(underscorePos + 1)) : -1; // 提取并转换
+        return instID;
     }
+    void setInstID(int _instID) { instID = _instID; }
 
     void addMapInstID(int _id) { instMapIDVec.push_back(_id); }
     std::vector<int> getMapInstID() { return instMapIDVec; }
