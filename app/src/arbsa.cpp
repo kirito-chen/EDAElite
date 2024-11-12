@@ -112,12 +112,12 @@ int calculRelatedRangeMap(bool isBaseline, std::map<int, int> &rangeActualMap, c
 {
     for (int i : instRelatedNetId)
     {
-        if (glbPackNetMap.count(i) <= 0)
+        if (glbNetMap.count(i) <= 0)
         {
             std::cout << "calculRelatedRangeMap can not find this netId:" << i << std::endl;
             continue;
         }
-        Net *net = glbPackNetMap[i];
+        Net *net = glbNetMap[i];
         // 访问net input 引脚
         Instance *instIn = net->getInpin()->getInstanceOwner();
         int x, y, z;
@@ -748,7 +748,7 @@ int arbsa(bool isBaseline)
     float T = 2;
     float threashhold = 0;      // 1e-5
     float alpha = 0.8;          // 0.8-0.99
-    const int timeLimit = 1180; // 1180  3580
+    const int timeLimit = 100; // 1180  3580
     // 计算初始cost
     int cost = 0, costNew = 0;
     cost = getWirelength(isBaseline);
@@ -1110,6 +1110,16 @@ int arbsa(bool isBaseline)
 // 粗化使用
 int newArbsa(bool isBaseline, bool isSeqPack)
 {
+
+    // 获取当前时间
+    std::time_t now = std::time(nullptr);
+    // 转换为本地时间
+    std::tm* localTime = std::localtime(&now);
+
+    // 输出当前时间
+    std::cout << "当前时间: "
+              << std::put_time(localTime, "%Y-%m-%d %H:%M:%S") << std::endl;
+
     // 记录开始时间
     auto start = std::chrono::high_resolution_clock::now();
 

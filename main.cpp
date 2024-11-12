@@ -32,16 +32,17 @@ int main(int argc, char *argv[])
     std::string timingFile = argv[3];
     std::string outFile = argv[4];
 
-    //读框架
-    // 打开 JSON 文件
+    // 读框架
+    //  打开 JSON 文件
     std::ifstream inputFile("config.json");
-    if (!inputFile.is_open()) {
+    if (!inputFile.is_open())
+    {
         std::cerr << "Failed to open config file." << std::endl;
         return 1;
     }
     // 读取 JSON 文件内容
     std::string jsonContent((std::istreambuf_iterator<char>(inputFile)),
-                             std::istreambuf_iterator<char>());
+                            std::istreambuf_iterator<char>());
     inputFile.close();
 
     // 提取指定字段的值
@@ -63,14 +64,14 @@ int main(int argc, char *argv[])
     }
     std::cout << "  Successfully read Arch files." << std::endl;
 
-    //读取case
+    // 读取case
     if (!readInputNodes(nodesFile))
     {
         std::cout << "Failed to read nodesFile" << std::endl;
     }
     if (!readInputNets(netsFile))
     {
-       std::cout << "Failed to read netsFile" << std::endl;
+        std::cout << "Failed to read netsFile" << std::endl;
     }
     if (!readInputTiming(timingFile))
     {
@@ -78,47 +79,49 @@ int main(int argc, char *argv[])
     }
     std::cout << "  Successfully read design files." << std::endl;
 
-    
-    //设置isPLB数组
+    // 设置isPLB数组
     setIsPLB();
 
-    //基于baseline修改
+    // 基于baseline修改
     bool isBaseline = false;
     bool isSeqPack = false;
-    readOutputNetlist(nodesFile);
+    
 
     reportDesignStatistics();
+    if (isBaseline)
+    {
+        arbsa(isBaseline);
+        // legalCheck();
+        // reportWirelength();
+    }
+    else
+    {
+        readOutputNetlist(nodesFile);
+        // legalCheck();
+        matchLUTPairs(glbInstMap, true, isSeqPack); // 打包代码
+        printInstanceInformation();
+        // legalCheck();
+        // reportWirelength();
 
-    // readOutputNetlist(outFile);
-    // legalCheck();
-    // reportWirelength();
+        // 模拟退火
+        newArbsa(isBaseline, isSeqPack);
+    }
 
-    matchLUTPairs(glbInstMap, true, isSeqPack);  // 打包代码
-    printInstanceInformation();
-    //生成结果
-    // generateOutputFile(isBaseline, outFile);
-    // legalCheck();
-    reportWirelength();
-    
-    // 模拟退火
-    newArbsa(isBaseline, isSeqPack);
-
-
-    //生成结果
+    // 生成结果
     generateOutputFile(isBaseline, outFile);
-    
-    //保留FM使用记录
-    // else if (tokens[0] == "FM")
-    // {
-    //     calculateTileRemain();
-    //     for (size_t i = 0; i < 3; i++)
-    //     {
-    //         reportWirelength();
-    //         std::cout << "第" << i +1 << "次迭代";
-    //         FM();
-    //     }
-    // }
-    
+
+    // 保留FM使用记录
+    //  else if (tokens[0] == "FM")
+    //  {
+    //      calculateTileRemain();
+    //      for (size_t i = 0; i < 3; i++)
+    //      {
+    //          reportWirelength();
+    //          std::cout << "第" << i +1 << "次迭代";
+    //          FM();
+    //      }
+    //  }
+
     // free memory before exit
     // for (auto &lib : glbLibMap)
     // {
@@ -132,6 +135,6 @@ int main(int argc, char *argv[])
     // {
     //     delete net.second;
     // }
-    
+
     return 0;
 }

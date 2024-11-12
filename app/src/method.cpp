@@ -7,6 +7,7 @@
 #include <iostream>
 #include <map>
 #include <future>
+#include "wirelength.h"
 
 #include <thread>
 #include <mutex>
@@ -25,7 +26,7 @@ std::mutex lutMutex;
 std::unordered_set<int> matchedLUTs; // 存储已匹配的 LUT IDs
 std::mutex seqPlacementMutex;        // 互斥锁保护对 seqPlacementMap 的访问
 std::mutex glbPackNetMapMutex;       // 添加 glbPackNetMapMutex 变量，用于保护 glbPackNetMap 的访问
-std::mutex oldNetIDMutex;       // 用于保护 oldNetID2newNetID 的互斥锁
+std::mutex oldNetIDMutex;            // 用于保护 oldNetID2newNetID 的互斥锁
 
 // LUT组匹配,将剩余未加入LUT组的LUT单独加入新的LUT组——已确定正确
 void populateLUTGroups(std::map<int, Instance *> &glbInstMap)
@@ -568,19 +569,19 @@ void matchLUTPairsThread(std::map<int, Instance *> &glbInstMap, std::vector<int>
                 std::unordered_set<int> unionPins = unionSets(currentLUTNets, otherLUTNets);
                 int totalInpins = unionPins.size();
 
-                // 完全匹配模式
-                if (sharedNetCount > maxSharedNets && totalInpins == inputPinNum && currentLUTNets.size() == otherLUTNets.size())
-                {
-                    maxSharedNets = sharedNetCount;
-                    bestMatchedLUTID = otherLUTID;
-                }
-
-                // 最大匹配模式
-                // if (sharedNetCount > maxSharedNets && totalInpins <= inputPinNum)
+                // // 完全匹配模式
+                // if (sharedNetCount > maxSharedNets && totalInpins == inputPinNum && currentLUTNets.size() == otherLUTNets.size())
                 // {
                 //     maxSharedNets = sharedNetCount;
                 //     bestMatchedLUTID = otherLUTID;
                 // }
+
+                // 最大匹配模式
+                if (sharedNetCount > maxSharedNets && totalInpins <= 6 && sharedNetCount > 1)
+                {
+                    maxSharedNets = sharedNetCount;
+                    bestMatchedLUTID = otherLUTID;
+                }
             }
         }
 
@@ -684,7 +685,9 @@ void matchLUTPairs(std::map<int, Instance *> &glbInstMap, bool isLutPack, bool i
         updateSEQLocations(seqPlacementMap);
     }
     updateInstancesToTiles(isSeqPack); // 根据打包情况生成新的初始布局
-    initialGlbPackInstMap(isSeqPack);  // 初始化 glbPackInstMap
+    reportWirelength();
+
+    initialGlbPackInstMap(isSeqPack); // 初始化 glbPackInstMap
 
     // 获取起始时间点
     auto start = std::chrono::high_resolution_clock::now();
@@ -699,7 +702,6 @@ void matchLUTPairs(std::map<int, Instance *> &glbInstMap, bool isLutPack, bool i
     std::chrono::duration<double, std::milli> elapsed = end - start;
     std::cout << "Execution time: " << elapsed.count() << " ms" << std::endl;
     std::cout << lineBreaker << std::endl;
-
 }
 
 // PLB打包，将LUT组打包成PLB组
@@ -2053,41 +2055,73 @@ void sortPLBGrouptList(std::vector<std::set<std::set<Instance *>>> &nonFixedPLBG
 // 获取上一个或下一个相邻的 Tile 位置，返回单个位置
 std::tuple<int, int> getNeighborTile(int x, int y, bool isLeft)
 {
-    if (isLeft)
+    while (true)
     {
-        // 尝试向左移动
-        if (y + 1 <= 299)
+        if (isLeft)
         {
-            return std::make_tuple(x, y + 1);
-        }
-        else
-        {
-            // y 超出范围，重置 y 为最大值，并尝试 x - 1
-            if (x - 1 >= 0)
+            // 尝试向左移动
+            if (y + 1 <= 299)
             {
-                return std::make_tuple(x - 1, 0);
+                if (isPLB[x][y + 1])
+                {
+                    return std::make_tuple(x, y + 1);
+                }
+                else
+                {
+                    y = y + 1;
+                }
+            }
+            else
+            {
+                // y 超出范围，重置 y 为最大值，并尝试 x - 1
+                if (x - 1 >= 0)
+                {
+                    if (isPLB[x - 1][0])
+                    {
+                        return std::make_tuple(x - 1, 0);
+                    }
+                    else
+                    {
+                        x = x - 1;
+                    }
+                }
             }
         }
-    }
-    else
-    {
-        // 尝试向右移动
-        if (y + 1 <= 299)
-        {
-            return std::make_tuple(x, y + 1);
-        }
         else
         {
-            // y 超出范围，重置 y 为 0 并尝试 x + 1
-            if (x + 1 <= 149)
+            // 尝试向右移动
+            if (y + 1 <= 299)
             {
-                return std::make_tuple(x + 1, y);
+                if (isPLB[x][y + 1])
+                {
+                    return std::make_tuple(x, y + 1);
+                }
+                else
+                {
+                    y = y + 1;
+                }
+            }
+            else
+            {
+
+                // y 超出范围，重置 y 为 0 并尝试 x + 1
+                if (x + 1 <= 149)
+                {
+                    if (isPLB[x + 1][y])
+                    {
+                        return std::make_tuple(x + 1, y);
+                    }
+                    else
+                    {
+                        x = x + 1;
+                    }
+                }
             }
         }
     }
 
-    // 超出范围，返回无效位置
-    return std::make_tuple(-1, -1);
+    // // 超出范围，返回无效位置
+    // return std::make_tuple(-1, -1);
 }
 
 // 获取上一个或下一个相邻的 Tile 位置，返回单个位置
@@ -2308,26 +2342,29 @@ void recoverAllMap(bool isSeqPack)
     }
 }
 
-void processNet(int netID, Net* net, int& newNetPackID) {
+void processNet(int netID, Net *net, int &newNetPackID)
+{
     {
         std::lock_guard<std::mutex> lock(oldNetIDMutex); // 用互斥锁保护 oldNetID2newNetID 的访问
         oldNetID2newNetID.insert(std::make_pair(netID, newNetPackID));
     }
 
     auto currentInPin = net->getInpin();
-    if (currentInPin->getInstanceOwner()->getMapInstID().size() == 0) {
+    if (currentInPin->getInstanceOwner()->getMapInstID().size() == 0)
+    {
         return;
     }
 
-    Pin* newInPin = new Pin(newNetPackID, currentInPin->getProp(), currentInPin->getTimingCritical(), nullptr);
+    Pin *newInPin = new Pin(newNetPackID, currentInPin->getProp(), currentInPin->getTimingCritical(), nullptr);
     newInPin->setInstanceOwner(currentInPin->getInstanceOwner()->getPackInstance());
 
-    Net* newNet = new Net(newNetPackID);
+    Net *newNet = new Net(newNetPackID);
     newNet->setClock(net->isClock());
     newNet->setInpin(newInPin);
 
-    for (auto currentOutPin : net->getOutputPins()) {
-        Pin* newOutPin = new Pin(newNetPackID, currentOutPin->getProp(), currentOutPin->getTimingCritical(), nullptr);
+    for (auto currentOutPin : net->getOutputPins())
+    {
+        Pin *newOutPin = new Pin(newNetPackID, currentOutPin->getProp(), currentOutPin->getTimingCritical(), nullptr);
         newOutPin->setInstanceOwner(currentOutPin->getInstanceOwner()->getPackInstance());
         newNet->addPinIfUnique(newOutPin);
     }
@@ -2339,25 +2376,30 @@ void processNet(int netID, Net* net, int& newNetPackID) {
     }
 }
 
-void initialGlbPackNetMap_multi_thread() {
+void initialGlbPackNetMap_multi_thread()
+{
     std::cout << " --- 生成新的 glbPackNetMap ---" << std::endl;
 
     // 获取系统的硬件线程数
     unsigned int numThreads = std::thread::hardware_concurrency();
-    if (numThreads == 0) numThreads = 8;  // 如果无法检测到核心数，使用 8 作为默认值
+    if (numThreads == 0)
+        numThreads = 8; // 如果无法检测到核心数，使用 8 作为默认值
 
     // 使用线程池限制线程数量
     std::vector<std::future<void>> futures;
     int newNetPackID = 0;
 
-    for (auto iter : glbNetMap) {
+    for (auto iter : glbNetMap)
+    {
         int netID = iter.first;
-        Net* net = iter.second;
+        Net *net = iter.second;
 
         // 将任务加入线程池
-        if (futures.size() >= numThreads) {
-            for (auto& f : futures) {
-                f.wait();  // 等待当前的任务完成
+        if (futures.size() >= numThreads)
+        {
+            for (auto &f : futures)
+            {
+                f.wait(); // 等待当前的任务完成
             }
             futures.clear();
         }
@@ -2366,7 +2408,8 @@ void initialGlbPackNetMap_multi_thread() {
     }
 
     // 等待所有任务完成
-    for (auto& f : futures) {
+    for (auto &f : futures)
+    {
         f.wait();
     }
 }
