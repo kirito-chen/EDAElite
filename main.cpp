@@ -87,27 +87,37 @@ int main(int argc, char *argv[])
     bool isSeqPack = false;
 
     reportDesignStatistics();
+
     if (isBaseline)
     {
-        arbsa(isBaseline);
-        // legalCheck();
-        // reportWirelength();
+        setPinDensityMapAndTopValues();
+        arbsa(isBaseline, nodesFile);
+        
+        // free memory before exit
+        for (auto &lib : glbLibMap)
+        {
+            delete lib.second;
+        }
+        for (auto &inst : glbInstMap)
+        {
+            delete inst.second;
+        }
+        for (auto &net : glbNetMap)
+        {
+            delete net.second;
+        }
     }
     else
     {
         readOutputNetlist(nodesFile);
-        // legalCheck();
+
         matchLUTPairs(glbInstMap, true, isSeqPack); // 打包代码
         printInstanceInformation();
-        // legalCheck();
-        // reportWirelength();
-
         // 模拟退火
         newArbsa(isBaseline, isSeqPack);
     }
-
-    // legalCheck();
-    // reportWirelength();
+    // 生成结果
+    generateOutputFile(isBaseline, outFile);
 
     if (false)
     {
