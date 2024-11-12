@@ -34,8 +34,6 @@
 #define MAX_TILE_PIN_INPUT_COUNT 112.0 // 48 LUT input pins + 16 SEQ input pins (D) + 48 SEQ ctrl pins (CE CLK SR)
 #define MAX_TILE_PIN_OUTPUT_COUNT 32.0 // 16 LUT output pins + 16 SEQ output pins
 
-
-
 enum PinProp
 {
     PIN_PROP_NONE,
@@ -46,6 +44,7 @@ enum PinProp
 
 class Instance;
 class Net;
+class SEQBankPlacement;
 class Slot
 {
 private:
@@ -85,11 +84,12 @@ struct LUTUsage
     std::set<int> remainingPins; // 使用该引脚的netID
 };
 
-class Tile {
-    private:
-        int col;
-        int row;
-        std::set<std::string> tileTypes;  //cjq 包含PLB DSP RAMA IOA等
+class Tile
+{
+private:
+    int col;
+    int row;
+    std::set<std::string> tileTypes; // cjq 包含PLB DSP RAMA IOA等
 
     // container to record instances belone to this tile
     std::map<std::string, slotArr> instanceMap;
@@ -158,10 +158,10 @@ public:
     int findOffset(std::string instTypes, Instance *inst, bool isBaseline);
     int getLUTCount() const;
 
-    std::vector<std::set<Instance*>> getFixedOptimizedLUTGroups() const;
+    std::vector<std::set<Instance *>> getFixedOptimizedLUTGroups() const;
     std::vector<int> getFixedOptimizedDRAMGroups() const;
+    bool addSeqBank(SEQBankPlacement seqBank);
 
-    
     std::vector<int> getSeqInstanceBankNum();
 };
 
@@ -266,7 +266,10 @@ class Pin
 
 public:
     Pin() : netID(-1), prop(PIN_PROP_NONE), timingCritical(false), instanceOwner(nullptr) {} // 默认构造函数
-    ~Pin() {}                                                                                // 析构函数
+    Pin(int netID, PinProp prop, bool timingCritical, Instance *instanceOwner)
+        : netID(netID), prop(prop), timingCritical(timingCritical), instanceOwner(instanceOwner) {}
+
+    ~Pin() {} // 析构函数
 
     // Getter and setter for netID
     int getNetID() const { return netID; } // -1 means unconnected
@@ -295,6 +298,7 @@ class Instance
     std::tuple<int, int, int> location;     // location after optimization
     std::vector<Pin *> inpins;
     std::vector<Pin *> outpins;
+    int instID;
 
     int allRelatedNetHPWL;     // 存取与inst相关的所有net的HPWL之和
     int allRelatedNetHPWLAver; // cjq modify 24.10.20 平均HPWL
@@ -302,12 +306,14 @@ class Instance
     std::vector<int> movableRegion; // wbx，inst的可移动区域，由inst的net最小外包矩形给出
     int matchedLUTID;               // 用于存储与当前LUT匹配的LUT实例ID
 
-    bool isMatch;
+    bool mapMatched; // 用于检查 initialGlbPackInstMap
     int plbGroupID;
-    int lutSetID;       //指定LUT的LUT组编号
+    int lutSetID; // 指定LUT的LUT组编号
 
     bool lutInitialed; // 这个是用来确保LUT类型的instance在updateInstancesToTiles只被调整一次位置，默认为false
     int seqGroupID;
+
+    std::vector<int> instMapIDVec; // 这里存储的是粗化之后用于映射的instID，LUT和SEQ共用
 
 public:
     Instance();
@@ -315,7 +321,8 @@ public:
 
     void modifyFixed(bool _fix) { fixed = _fix; }
 
-    bool isMatched() { return isMatch; }
+    bool isMapMatched() { return mapMatched; }
+    void setMapMatched(bool _isMapMatched) { mapMatched = _isMapMatched; }
 
     // 添加 Getter 和 Setter 函数
     int getMatchedLUTID() const { return matchedLUTID; }
@@ -330,7 +337,7 @@ public:
 
     bool isFixed() const { return fixed; }
     void setFixed(bool value) { fixed = value; }
-    
+
     bool isLUTInitial() const { return lutInitialed; }
     void setLUTInitial(bool _isLUTInitial) { lutInitialed = _isLUTInitial; }
 
@@ -382,9 +389,19 @@ public:
     int getSEQID() { return seqGroupID; }
     int getInstID()
     {
-        size_t underscorePos = instanceName.find('_');                                                        // 找到下划线的位置
-        return (underscorePos != std::string::npos) ? std::stoi(instanceName.substr(underscorePos + 1)) : -1; // 提取并转换
+        // size_t underscorePos = instanceName.find('_');                                                        // 找到下划线的位置
+        // return (underscorePos != std::string::npos) ? std::stoi(instanceName.substr(underscorePos + 1)) : -1; // 提取并转换
+        return instID;
     }
+    void setInstID(int _instID) { instID = _instID; }
+
+    void addMapInstID(int _id) { instMapIDVec.push_back(_id); }
+    std::vector<int> getMapInstID() { return instMapIDVec; }
+
+    void unionInputPins(const std::vector<Pin *> &vec1);
+    void unionOutputPins(const std::vector<Pin *> &vec1);
+
+    Instance *getPackInstance();
 };
 
 class Net
@@ -397,13 +414,18 @@ class Net
     int HPWL;     // 当前net的总半周线长
 
     std::vector<int> netArea; // net 的最小外包矩形
+    int originID;             // 原始的netID，用于找instance的pin的新的netID
 
 public:
     Net(int netID) : id(netID), clock(false), inpin(nullptr)
     {
         netArea.assign(4, -1); //(xlb,ylb,xrt,yrt)
+        originID = -1;
     } // 默认构造函数
     ~Net() {} // 析构函数
+
+    int getOriginID() { return originID; }
+    void setOriginID(int _originID) { originID = _originID; }
 
     // Getter and setter for id
     int getId() const { return id; }
@@ -444,6 +466,24 @@ public:
     bool reportNet();
 
     std::vector<Pin *> getPins();
+    void addPinIfUnique(Pin *newPin)
+    {
+        // 获取 newPin 的 instanceOwner 的 ID
+        int newID = newPin->getInstanceOwner()->getInstID();
+
+        // 检查是否已经有相同 ID 的 instanceOwner 在列表中
+        for (const auto &pin : outputPins)
+        {
+            if (pin->getInstanceOwner()->getInstID() == newID)
+            {
+                // 已经有相同的 instanceOwner ID，跳过添加
+                return;
+            }
+        }
+
+        // 如果没有找到相同 ID，添加新的 Pin
+        outputPins.push_back(newPin);
+    }
 };
 
 class PLBPlacement
@@ -519,7 +559,7 @@ public:
     }
 
     // 构造函数
-    SEQBankPlacement(int id) : bankID(id), isFixed(false) {}
+    SEQBankPlacement(int id) : bankID(id), isFixed(false) { location = std::make_tuple<int, int>(-1, -1); }
 
     // 设置和获取Bank的ID
     int getBankID() const { return bankID; }

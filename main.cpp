@@ -32,16 +32,17 @@ int main(int argc, char *argv[])
     std::string timingFile = argv[3];
     std::string outFile = argv[4];
 
-    //读框架
-    // 打开 JSON 文件
+    // 读框架
+    //  打开 JSON 文件
     std::ifstream inputFile("config.json");
-    if (!inputFile.is_open()) {
+    if (!inputFile.is_open())
+    {
         std::cerr << "Failed to open config file." << std::endl;
         return 1;
     }
     // 读取 JSON 文件内容
     std::string jsonContent((std::istreambuf_iterator<char>(inputFile)),
-                             std::istreambuf_iterator<char>());
+                            std::istreambuf_iterator<char>());
     inputFile.close();
 
     // 提取指定字段的值
@@ -63,14 +64,14 @@ int main(int argc, char *argv[])
     }
     std::cout << "  Successfully read Arch files." << std::endl;
 
-    //读取case
+    // 读取case
     if (!readInputNodes(nodesFile))
     {
         std::cout << "Failed to read nodesFile" << std::endl;
     }
     if (!readInputNets(netsFile))
     {
-       std::cout << "Failed to read netsFile" << std::endl;
+        std::cout << "Failed to read netsFile" << std::endl;
     }
     if (!readInputTiming(timingFile))
     {
@@ -78,118 +79,63 @@ int main(int argc, char *argv[])
     }
     std::cout << "  Successfully read design files." << std::endl;
 
+    // 设置isPLB数组
+    setIsPLB();
 
-
-    //基于baseline修改
+    // 基于baseline修改
     bool isBaseline = false;
-    readOutputNetlist(nodesFile);
+    bool isSeqPack = false;
 
-    matchLUTPairs(glbInstMap, true, false);
+    reportDesignStatistics();
+    if (isBaseline)
+    {
+        arbsa(isBaseline);
+        // legalCheck();
+        // reportWirelength();
+    }
+    else
+    {
+        readOutputNetlist(nodesFile);
+        // legalCheck();
+        matchLUTPairs(glbInstMap, true, isSeqPack); // 打包代码
+        printInstanceInformation();
+        // legalCheck();
+        // reportWirelength();
+
+        // 模拟退火
+        newArbsa(isBaseline, isSeqPack);
+    }
+
     // legalCheck();
     // reportWirelength();
-    int x,y,z;
-    for(auto& it : glbInstMap){
-        Instance* inst = it.second;
-        if((inst->getModelName()).substr(0,3) != "LUT"){
-            continue;
-        }
-        std::tie(x,y,z) = inst->getLocation();
-        if(inst->getMatchedLUTID() != -1){
-            int xx,yy,zz;
-            Instance* anotherInst = glbInstMap[inst->getMatchedLUTID()];
-            std::tie(xx,yy,zz)= anotherInst->getLocation();
-            if(xx != x || yy != y || zz != z){
-                std::cout<<"before inst: "<<inst->getInstanceName()<<" no match loc"<<
-                " x "<<x<<" y "<<y<<" z "<<z <<
-                " xx "<<xx<<" yy "<<yy<<" zz "<<zz
-                <<std::endl;
-            }
-        }
-        int instId = std::stoi(inst->getInstanceName().substr(5));
-        Tile* tileCur = chip.getTile(x,y);
-        slotArr *slotArrCur = tileCur->getInstanceByType("LUT"); //LUT or SEQ
-        Slot* slot = slotArrCur->at(z);
-        std::list<int>& instances = slot->getOptimizedInstancesRef();
-        // 
-        bool matched = false;
-        for(int instIdTmp : instances){
-            if(instId == instIdTmp){
-                matched = true;
-                break;
-            }
-        }
-        if(!matched) std::cout<<"before inst: "<<inst->getInstanceName()<<" no match slot"<<std::endl;
-        
-    }
-    //设置isPLB数组
-    setIsPLB();
-    //设置 glbPinDensityMap 和 topValues
-    setPinDensityMapAndTopValues();
 
-    // 模拟退火
-    arbsa(isBaseline, nodesFile);
+    if (false)
+    {
+        // 设置isPLB数组
+        setIsPLB();
+        // 设置 glbPinDensityMap 和 topValues
+        setPinDensityMapAndTopValues();
 
-    for(auto& it : glbInstMap){
-        Instance* inst = it.second;
-        if((inst->getModelName()).substr(0,3) != "LUT"){
-            continue;
+        // 模拟退火
+        arbsa(isBaseline, nodesFile);
+
+        // 生成结果
+        generateOutputFile(isBaseline, outFile);
+
+        // free memory before exit
+        for (auto &lib : glbLibMap)
+        {
+            delete lib.second;
         }
-        std::tie(x,y,z) = inst->getLocation();
-        if(inst->getMatchedLUTID() != -1){
-            int xx,yy,zz;
-            Instance* anotherInst = glbInstMap[inst->getMatchedLUTID()];
-            std::tie(xx,yy,zz)= anotherInst->getLocation();
-            if(xx != x || yy != y || zz != z){
-                std::cout<<"after inst: "<<inst->getInstanceName()<<" no match loc"<<
-                " x "<<x<<" y "<<y<<" z "<<z <<
-                " xx "<<xx<<" yy "<<yy<<" zz "<<zz
-                <<std::endl;
-            }
+        for (auto &inst : glbInstMap)
+        {
+            delete inst.second;
         }
-        int instId = std::stoi(inst->getInstanceName().substr(5));
-        Tile* tileCur = chip.getTile(x,y);
-        slotArr *slotArrCur = tileCur->getInstanceByType("LUT"); //LUT or SEQ
-        Slot* slot = slotArrCur->at(z);
-        std::list<int>& instances = slot->getOptimizedInstancesRef();
-        // 
-        bool matched = false;
-        for(int instIdTmp : instances){
-            if(instId == instIdTmp){
-                matched = true;
-                break;
-            }
+        for (auto &net : glbNetMap)
+        {
+            delete net.second;
         }
-        if(!matched) std::cout<<"after inst:"<<inst->getInstanceName()<<" no match slot"<<std::endl;
-        
     }
 
-    //生成结果
-    generateOutputFile(isBaseline, outFile);
-    
-    //保留FM使用记录
-    // else if (tokens[0] == "FM")
-    // {
-    //     calculateTileRemain();
-    //     for (size_t i = 0; i < 3; i++)
-    //     {
-    //         reportWirelength();
-    //         std::cout << "第" << i +1 << "次迭代";
-    //         FM();
-    //     }
-    // }
-    // free memory before exit
-    for (auto &lib : glbLibMap)
-    {
-        delete lib.second;
-    }
-    for (auto &inst : glbInstMap)
-    {
-        delete inst.second;
-    }
-    for (auto &net : glbNetMap)
-    {
-        delete net.second;
-    }
-    
     return 0;
 }

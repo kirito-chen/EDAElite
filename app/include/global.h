@@ -33,6 +33,13 @@ extern std::unordered_map<int, PLBPlacement> plbPlacementMap;
 // 全局SEQ映射
 extern std::unordered_map<int, SEQBankPlacement> seqPlacementMap;
 
+// 粗化新数据
+extern std::map<int, Instance*> glbPackInstMap;    // 存储打包后的全局InstMap
+extern std::map<int, Net*> glbPackNetMap;   // 存储打包后的全局NetMap
+
+
+//全局映射，存放旧netID到新netID的映射
+extern std::map<int, int> oldNetID2newNetID;
 
 
 

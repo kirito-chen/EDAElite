@@ -141,6 +141,7 @@ bool readInputNodes(const std::string& fileName) {
       std::string subStr = name.substr(underscorePos + 1);
       // Convert the second substring to an integer
       instID = std::stoi(subStr);
+
     } else {
       std::cout << "Error: Invalid name format: " << name << std::endl;
       errCnt++;
@@ -171,6 +172,7 @@ bool readInputNodes(const std::string& fileName) {
     newInstance->setBaseLocation(std::make_tuple(x, y, z));
     newInstance->setFixed(isFixed);
     newInstance->setCellLib(libPtr);
+    newInstance->setInstID(instID);
     glbInstMap[instID] = newInstance;
 
     // add the instance to the corresponding tile

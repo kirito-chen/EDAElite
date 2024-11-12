@@ -6,6 +6,8 @@
 #include <fstream>
 #include <iostream>
 #include <map>
+#include <future>
+#include "wirelength.h"
 
 #include <thread>
 #include <mutex>
@@ -23,6 +25,8 @@ int generateNewInstanceID()
 std::mutex lutMutex;
 std::unordered_set<int> matchedLUTs; // 存储已匹配的 LUT IDs
 std::mutex seqPlacementMutex;        // 互斥锁保护对 seqPlacementMap 的访问
+std::mutex glbPackNetMapMutex;       // 添加 glbPackNetMapMutex 变量，用于保护 glbPackNetMap 的访问
+std::mutex oldNetIDMutex;            // 用于保护 oldNetID2newNetID 的互斥锁
 
 // LUT组匹配,将剩余未加入LUT组的LUT单独加入新的LUT组——已确定正确
 void populateLUTGroups(std::map<int, Instance *> &glbInstMap)
@@ -503,6 +507,7 @@ void matchLUTPairsThread(std::map<int, Instance *> &glbInstMap, std::vector<int>
                          std::unordered_map<int, std::unordered_set<int>> &lutNetMap,
                          std::unordered_map<int, std::unordered_set<int>> &netLUTMap, int start, int end)
 {
+    int wireLimit = 1; // 线长限制，默认为2
     while (start < end)
     {
         int bestMatchedLUTID = -1;
@@ -510,10 +515,11 @@ void matchLUTPairsThread(std::map<int, Instance *> &glbInstMap, std::vector<int>
 
         int currentLUTID = unmatchedLUTs[start];
         Instance *currentLUT = glbInstMap[currentLUTID];
+
         int inputPinNum = currentLUT->getUsedNumInpins();
         {
             std::lock_guard<std::mutex> lock(lutMutex);
-            if (matchedLUTs.find(currentLUTID) != matchedLUTs.end())
+            if (matchedLUTs.find(currentLUTID) != matchedLUTs.end() && currentLUT->getMatchedLUTID() != -1)
             {
                 ++start;
                 continue;
@@ -532,6 +538,13 @@ void matchLUTPairsThread(std::map<int, Instance *> &glbInstMap, std::vector<int>
                     continue;
 
                 Instance *otherLUT = glbInstMap[otherLUTID];
+
+                // 距离限制判断
+                int twoinstwirelength = calculateTwoInstanceWireLength(currentLUT, otherLUT, false);
+                if (twoinstwirelength >= wireLimit)
+                {
+                    continue;
+                }
 
                 {
                     std::lock_guard<std::mutex> lock(lutMutex);
@@ -556,7 +569,15 @@ void matchLUTPairsThread(std::map<int, Instance *> &glbInstMap, std::vector<int>
                 std::unordered_set<int> unionPins = unionSets(currentLUTNets, otherLUTNets);
                 int totalInpins = unionPins.size();
 
-                if (sharedNetCount > maxSharedNets && totalInpins == inputPinNum && currentLUTNets.size() == otherLUTNets.size())
+                // // 完全匹配模式
+                // if (sharedNetCount > maxSharedNets && totalInpins == inputPinNum && currentLUTNets.size() == otherLUTNets.size())
+                // {
+                //     maxSharedNets = sharedNetCount;
+                //     bestMatchedLUTID = otherLUTID;
+                // }
+
+                // 最大匹配模式
+                if (sharedNetCount > maxSharedNets && totalInpins <= 6 && sharedNetCount > 1)
                 {
                     maxSharedNets = sharedNetCount;
                     bestMatchedLUTID = otherLUTID;
@@ -573,6 +594,7 @@ void matchLUTPairsThread(std::map<int, Instance *> &glbInstMap, std::vector<int>
                 matchedLUTs.insert(currentLUTID);
                 matchedLUTs.insert(bestMatchedLUTID);
 
+                // 添加matchedID
                 currentLUT->setMatchedLUTID(bestMatchedLUTID);
                 glbInstMap[bestMatchedLUTID]->setMatchedLUTID(currentLUTID);
 
@@ -595,6 +617,7 @@ void matchLUTPairs(std::map<int, Instance *> &glbInstMap, bool isLutPack, bool i
     std::vector<int> unmatchedLUTs;                             // 未匹配的LUT集合
 
     // 构建 LUT 和 Net 的映射
+
     for (const auto &instPair : glbInstMap)
     {
         int instID = instPair.first;
@@ -661,7 +684,24 @@ void matchLUTPairs(std::map<int, Instance *> &glbInstMap, bool isLutPack, bool i
         initializeSEQPlacementMap(glbInstMap);
         updateSEQLocations(seqPlacementMap);
     }
-    updateInstancesToTiles();
+    updateInstancesToTiles(isSeqPack); // 根据打包情况生成新的初始布局
+    reportWirelength();
+
+    initialGlbPackInstMap(isSeqPack); // 初始化 glbPackInstMap
+
+    // 获取起始时间点
+    auto start = std::chrono::high_resolution_clock::now();
+
+    // 执行要测量的函数
+    initialGlbPackNetMap();
+    // initialGlbPackNetMap_multi_thread();
+
+    // 获取结束时间点
+    auto end = std::chrono::high_resolution_clock::now();
+    // 计算耗时（以毫秒为单位）
+    std::chrono::duration<double, std::milli> elapsed = end - start;
+    std::cout << "Execution time: " << elapsed.count() << " ms" << std::endl;
+    std::cout << lineBreaker << std::endl;
 }
 
 // PLB打包，将LUT组打包成PLB组
@@ -1288,6 +1328,7 @@ void initializePLBPlacementMap(const std::map<int, std::set<std::set<Instance *>
 void initializeSEQPlacementMap(const std::map<int, Instance *> &glbInstMap)
 {
     int bankID = 0;
+    int wireLimit = 1; // 默认为1
 
     for (const auto &instPair : glbInstMap)
     {
@@ -1298,17 +1339,34 @@ void initializeSEQPlacementMap(const std::map<int, Instance *> &glbInstMap)
         {
             continue;
         }
-
         bool placed = false;
 
         // 尝试将当前 SEQ 实例放入现有的 bank
         for (auto &[_, bank] : seqPlacementMap)
         {
+
+            int x_inst = std::get<0>(inst->getLocation());
+            int y_inst = std::get<1>(inst->getLocation());
+            int x_bank = std::get<0>(bank.getLocation());
+            int y_bank = std::get<1>(bank.getLocation());
+            int twoInstWireLength = abs(x_inst - x_bank) + abs(y_inst - y_bank);
+
+            if (twoInstWireLength >= wireLimit)
+            {
+                continue;
+            }
+
             // 判断是否符合 bank 的约束：检查连接情况并确保数量限制在 8 个以内
             if (bank.getSEQCount() < 8 && bank.addInstance(inst))
             {
                 placed = true;
                 inst->setSEQID(bank.getBankID());
+
+                int xtmp = std::get<0>(bank.getLocation());
+                if (xtmp == -1)
+                {
+                    bank.setLocation(std::get<0>(inst->getLocation()), std::get<1>(inst->getLocation()));
+                }
                 break;
             }
         }
@@ -1327,6 +1385,12 @@ void initializeSEQPlacementMap(const std::map<int, Instance *> &glbInstMap)
             }
 
             newBank.addInstance(inst);
+            int xtmp = std::get<0>(newBank.getLocation());
+            if (xtmp == -1)
+            {
+                newBank.setLocation(std::get<0>(inst->getLocation()), std::get<1>(inst->getLocation()));
+            }
+
             inst->setSEQID(newBank.getBankID());
             seqPlacementMap[newBank.getBankID()] = newBank;
         }
@@ -1539,7 +1603,7 @@ void updateSEQLocations(std::unordered_map<int, SEQBankPlacement> &seqBankMap)
     }
 }
 
-bool updateInstancesToTiles()
+bool updateInstancesToTiles(bool isSeqPack)
 {
     // 清除所有 tile 中的 LUT 和 SEQ 实例
     for (int i = 0; i < chip.getNumCol(); i++)
@@ -1547,7 +1611,11 @@ bool updateInstancesToTiles()
         for (int j = 0; j < chip.getNumRow(); j++)
         {
             Tile *tile = chip.getTile(i, j);
-            tile->clearLUTOptimizedInstances(); // 清理 LUT 和 SEQ 类型的实例
+            tile->clearLUTOptimizedInstances(); // 清理 LUT 类型的实例
+            if (isSeqPack)
+            {
+                tile->clearSEQOptimizedInstances(); // 清理 LUT 类型的实例
+            }
         }
     }
 
@@ -1643,285 +1711,335 @@ bool updateInstancesToTiles()
                 tilePtr = chip.getTile(std::get<0>(newLocation), std::get<1>(newLocation));
             }
         }
-        // tilePtr有定义且有足够的资源放下lutGroupSet
-        if (tilePtr && lutGroupSet.size() <= tilePtr->getLUTCount())
+
+        const auto &oneLUTGroup = *lutGroupSet.begin();
+        int lutGroupNum = oneLUTGroup.size();
+        if (lutGroupNum == 2)
         {
-            // std::set<int> availableSites = {0, 1, 2, 3, 4, 5, 6, 7};
-            // 获取 "LUT" 类型的 slotArr 指针
-            slotArr *slots = tilePtr->getInstanceByType("LUT");
-            if (slots != nullptr)
+            // tilePtr有定义且有足够的资源放下lutGroupSet
+            if (tilePtr && lutGroupSet.size() <= tilePtr->getLUTCount())
             {
-                // 移除已使用的编号
-                for (size_t i = 0; i < slots->size(); ++i)
+                // std::set<int> availableSites = {0, 1, 2, 3, 4, 5, 6, 7};
+                // 获取 "LUT" 类型的 slotArr 指针
+                slotArr *slots = tilePtr->getInstanceByType("LUT");
+                if (slots != nullptr)
                 {
-                    if (!(*slots)[i]->getOptimizedInstances().empty())
+                    // 移除已使用的编号
+                    for (size_t i = 0; i < slots->size(); ++i)
                     {
-                        availableSites.erase(i);
+                        if (!(*slots)[i]->getOptimizedInstances().empty())
+                        {
+                            availableSites.erase(i);
+                        }
+                    }
+                }
+                for (const auto &lutGroup : lutGroupSet)
+                {
+                    int siteIndex = *availableSites.begin();
+                    for (Instance *instance : lutGroup)
+                    {
+                        instance->setLocation(std::make_tuple(std::get<0>(newLocation), std::get<1>(newLocation), siteIndex));
+                        int instID = instance->getInstID();
+                        if (tilePtr->addInstance(instID, siteIndex, instance->getModelName(), false))
+                        {
+                            instance->setLUTInitial(true);
+                            availableSites.erase(siteIndex);
+                        }
+                        else
+                        {
+                            std::cout << "Error: Failed to add non-fixed instance " << instance->getInstanceName()
+                                      << " to tile at " << std::get<0>(newLocation) << ", "
+                                      << std::get<1>(newLocation) << std::endl;
+                            return false;
+                        }
                     }
                 }
             }
-            for (const auto &lutGroup : lutGroupSet)
+            else
             {
-                int siteIndex = *availableSites.begin();
-                for (Instance *instance : lutGroup)
+                std::set<int> availableSitesInNewTile = {0, 1, 2, 3, 4, 5, 6, 7};
+                bool isfinished = false;
+                auto neighbors = getNeighborTile(std::get<0>(newLocation), std::get<1>(newLocation)); // 找下一个tile位置
+                while (!isfinished)
                 {
-                    instance->setLocation(std::make_tuple(std::get<0>(newLocation), std::get<1>(newLocation), siteIndex));
-                    int instID = instance->getInstID();
-                    if (tilePtr->addInstance(instID, siteIndex, instance->getModelName(), false))
+                    bool placed = false; // 标记是否成功放置
+
+                    int neighborX = std::get<0>(neighbors);
+                    int neighborY = std::get<1>(neighbors);
+                    tilePtr = chip.getTile(neighborX, neighborY);
+
+                    // 检查相邻 tile 是否有效并且有足够的资源
+                    if (tilePtr && lutGroupSet.size() <= tilePtr->getLUTCount() && tilePtr->getTileTypes().count("PLB"))
                     {
-                        instance->setLUTInitial(true);
+                        isfinished = true;
+                        // 获取 "LUT" 类型的 slotArr 指针
+                        slotArr *slots = tilePtr->getInstanceByType("LUT");
+                        if (slots != nullptr)
+                        {
+                            // 移除已使用的编号
+                            for (size_t i = 0; i < slots->size(); ++i)
+                            {
+                                if (!(*slots)[i]->getOptimizedInstances().empty())
+                                {
+                                    availableSitesInNewTile.erase(i);
+                                }
+                            }
+                        }
+                        for (const auto &lutGroup : lutGroupSet)
+                        {
+                            for (Instance *instance : lutGroup)
+                            {
+                                int siteIndex = *availableSitesInNewTile.begin();
+                                instance->setLocation(std::make_tuple(neighborX, neighborY, siteIndex));
+                                int instID = instance->getInstID();
+                                if (tilePtr->addInstance(instID, siteIndex, instance->getModelName(), false))
+                                {
+                                    instance->setLUTInitial(true);
+                                }
+                                else
+                                {
+                                    std::cout << "Error: Failed to add non-fixed instance " << instance->getInstanceName()
+                                              << " to tile at " << std::get<0>(newLocation) << ", "
+                                              << std::get<1>(newLocation) << std::endl;
+                                    return false;
+                                }
+                            }
+                        }
+                    }
+                    else
+                    {
+                        neighbors = getNeighborTile(neighborX, neighborY);
+                        int dummy = 0;
+                    }
+                }
+            }
+        }
+        if (lutGroupNum == 1)
+        {
+            Instance *oneLUT = *oneLUTGroup.begin();
+            // tilePtr有定义且有足够的资源放下lutGroupSet
+            int x = std::get<0>(newLocation);
+            int y = std::get<1>(newLocation);
+            bool isLeft = true;
+            if (x < 75)
+            {
+                isLeft = false;
+            }
+
+            int siteIndex = -1;
+            if (tilePtr && isValid(false, x, y, siteIndex, oneLUT))
+            {
+                for (const auto &lutGroup : lutGroupSet)
+                {
+                    oneLUT->setLocation(std::make_tuple(x, y, siteIndex));
+                    int instID = oneLUT->getInstID();
+                    if (tilePtr->addInstance(instID, siteIndex, oneLUT->getModelName(), false))
+                    {
+                        oneLUT->setLUTInitial(true);
                         availableSites.erase(siteIndex);
                     }
                     else
                     {
-                        std::cout << "Error: Failed to add non-fixed instance " << instance->getInstanceName()
+                        std::cout << "Error: Failed to add non-fixed instance " << oneLUT->getInstanceName()
                                   << " to tile at " << std::get<0>(newLocation) << ", "
                                   << std::get<1>(newLocation) << std::endl;
                         return false;
                     }
                 }
             }
-        }
-        else
-        {
-            std::set<int> availableSitesInNewTile = {0, 1, 2, 3, 4, 5, 6, 7};
-            bool isfinished = false;
-            auto neighbors = getNeighborTile(std::get<0>(newLocation), std::get<1>(newLocation)); // 找下一个tile位置
-            while (!isfinished)
+            else
             {
-                bool placed = false; // 标记是否成功放置
-
-                int neighborX = std::get<0>(neighbors);
-                int neighborY = std::get<1>(neighbors);
-                tilePtr = chip.getTile(neighborX, neighborY);
-
-                // 检查相邻 tile 是否有效并且有足够的资源
-                if (tilePtr && lutGroupSet.size() <= tilePtr->getLUTCount() && tilePtr->getTileTypes().count("PLB"))
+                bool isfinished = false;
+                auto neighbors = getNeighborTile(std::get<0>(newLocation), std::get<1>(newLocation), isLeft); // 找下一个tile位置
+                while (!isfinished)
                 {
-                    isfinished = true;
-                    // 获取 "LUT" 类型的 slotArr 指针
-                    slotArr *slots = tilePtr->getInstanceByType("LUT");
-                    if (slots != nullptr)
+                    bool placed = false; // 标记是否成功放置
+
+                    int neighborX = std::get<0>(neighbors);
+                    int neighborY = std::get<1>(neighbors);
+                    tilePtr = chip.getTile(neighborX, neighborY);
+
+                    // 检查相邻 tile 是否有效并且有足够的资源
+                    if (tilePtr && isValid(false, neighborX, neighborY, siteIndex, oneLUT) && tilePtr->getTileTypes().count("PLB"))
                     {
-                        // 移除已使用的编号
-                        for (size_t i = 0; i < slots->size(); ++i)
+                        isfinished = true;
+                        oneLUT->setLocation(std::make_tuple(neighborX, neighborY, siteIndex));
+                        int instID = oneLUT->getInstID();
+                        if (tilePtr->addInstance(instID, siteIndex, oneLUT->getModelName(), false))
                         {
-                            if (!(*slots)[i]->getOptimizedInstances().empty())
-                            {
-                                availableSitesInNewTile.erase(i);
-                            }
+                            oneLUT->setLUTInitial(true);
+                        }
+                        else
+                        {
+                            std::cout << "Error: Failed to add non-fixed instance " << oneLUT->getInstanceName()
+                                      << " to tile at " << std::get<0>(newLocation) << ", "
+                                      << std::get<1>(newLocation) << std::endl;
+                            return false;
                         }
                     }
-                    for (const auto &lutGroup : lutGroupSet)
+                    else
                     {
-                        for (Instance *instance : lutGroup)
-                        {
-                            int siteIndex = *availableSitesInNewTile.begin();
-                            instance->setLocation(std::make_tuple(neighborX, neighborY, siteIndex));
-                            int instID = instance->getInstID();
-                            if (tilePtr->addInstance(instID, siteIndex, instance->getModelName(), false))
-                            {
-                                instance->setLUTInitial(true);
-                            }
-                            else
-                            {
-                                std::cout << "Error: Failed to add non-fixed instance " << instance->getInstanceName()
-                                          << " to tile at " << std::get<0>(newLocation) << ", "
-                                          << std::get<1>(newLocation) << std::endl;
-                                return false;
-                            }
-                        }
+                        neighbors = getNeighborTile(neighborX, neighborY);
+                        int dummy = 0;
                     }
-                }
-                else
-                {
-                    neighbors = getNeighborTile(neighborX, neighborY);
-                    int dummy = 0;
                 }
             }
         }
     }
     //-------------------------------------------------------------------------------
 
-    // 将seq放置在tile上，并进行合法化处理
-    for (const auto &[bankID, bank] : seqPlacementMap)
+    if (isSeqPack)
     {
-        bool isSeqPlaceFinished = false;
-        // 获取 bank 的位置
-        auto [x, y] = bank.getLocation(); // 假设 getLocation() 返回 (x, y)
-        while (!isSeqPlaceFinished)
+        // 将seq放置在tile上，并进行合法化处理
+        for (const auto &[bankID, bank] : seqPlacementMap)
         {
+            bool isSeqPlaceFinished = false;
+            // 获取 bank 的位置
+            auto [x, y] = bank.getLocation(); // 假设 getLocation() 返回 (x, y)
+
             // 获取相应的 Tile
             Tile *tilePtr = chip.getTile(x, y);
-            if (tilePtr == nullptr)
-            {
-                std::cout << "Error: Tile at (" << x << ", " << y << ") is invalid." << std::endl;
-                continue; // 跳过无效的 Tile
-            }
-
-            // 检查 Tile 的类型是否为 PLB
+            std::vector<std::tuple<int, int>> neighbors;
+            // 如果tilePtr不是PLB，则生成邻域位置
             if (!tilePtr->getTileTypes().count("PLB"))
             {
-                std::cout << "Error: Tile at (" << x << ", " << y << ") is not a PLB." << std::endl;
-
-                auto neighbors = getNeighborTile(x, y); // 找下一个tile位置
-                x = std::get<0>(neighbors);
-                y = std::get<1>(neighbors);
-                continue; // 跳过非 PLB 类型的 Tile
+                neighbors = getNeighborTiles(x, y, 1); // 找下一个tile位置
             }
-
-            std::vector<int> seqBankNum = tilePtr->getSeqInstanceBankNum();
-
-            // 根据seqBankNum来判断能不能放置新的Seq组
-            if (seqBankNum.size() == 0)
+            if (tilePtr->addSeqBank(bank))
             {
-                // 遍历 bank 中的 SEQ 实例并进行放置
-                for (Instance *seqInstance : bank.getSEQInstances()) // 假设 getInstances() 返回 SEQ 实例的集合
-                {
-                    auto newLocation = seqInstance->getLocation();
-                    int siteIndex = std::get<2>(newLocation); // 获取坐标中的 siteIndex
-
-                    // 尝试将 SEQ 实例放置到 Tile 中
-                    int instID = seqInstance->getInstID();
-
-                    if (!tilePtr->addInstance(instID, siteIndex, seqInstance->getModelName(), false))
-                    {
-                        std::cout << "Error: Failed to add SEQ instance " << seqInstance->getInstanceName()
-                                  << " to tile at (" << x << ", " << y << ")." << std::endl;
-                        return false; // 返回错误
-                    }
-
-                    std::tuple<int, int, int> seqLocation = {x, y, siteIndex};
-                    seqInstance->setLocation(seqLocation);
-                    seqInstance->setLUTInitial(true); // 标记为已放置
-                }
                 isSeqPlaceFinished = true;
             }
-            if (seqBankNum.size() == 1)
+            else
             {
-                if (seqBankNum[0] == 1)
-                {
-                    // 遍历 bank 中的 SEQ 实例并进行放置
-                    for (Instance *seqInstance : bank.getSEQInstances()) // 假设 getInstances() 返回 SEQ 实例的集合
-                    {
-                        auto newLocation = seqInstance->getLocation();
-                        int siteIndex = std::get<2>(newLocation); // 获取坐标中的 siteIndex
-
-                        // 尝试将 SEQ 实例放置到 Tile 中
-                        int instID = seqInstance->getInstID();
-
-                        if (!tilePtr->addInstance(instID, siteIndex, seqInstance->getModelName(), false))
-                        {
-                            std::cout << "Error: Failed to add SEQ instance " << seqInstance->getInstanceName()
-                                      << " to tile at (" << x << ", " << y << ")." << std::endl;
-                            return false; // 返回错误
-                        }
-
-                        std::tuple<int, int, int> seqLocation = {x, y, siteIndex};
-                        seqInstance->setLocation(seqLocation);
-                        seqInstance->setLUTInitial(true); // 标记为已放置
-                    }
-                    isSeqPlaceFinished = true;
-                }
-                if (seqBankNum[0] == 0)
-                {
-                    // 遍历 bank 中的 SEQ 实例并进行放置
-                    for (Instance *seqInstance : bank.getSEQInstances()) // 假设 getInstances() 返回 SEQ 实例的集合
-                    {
-                        auto newLocation = seqInstance->getLocation();
-                        int siteIndex = std::get<2>(newLocation); // 获取坐标中的 siteIndex
-                        siteIndex += 8;
-                        // 尝试将 SEQ 实例放置到 Tile 中
-                        int instID = seqInstance->getInstID();
-
-                        if (!tilePtr->addInstance(instID, siteIndex, seqInstance->getModelName(), false))
-                        {
-                            std::cout << "Error: Failed to add SEQ instance " << seqInstance->getInstanceName()
-                                      << " to tile at (" << x << ", " << y << ")." << std::endl;
-                            return false; // 返回错误
-                        }
-                        std::tuple<int, int, int> seqLocation = {x, y, siteIndex};
-                        seqInstance->setLocation(seqLocation);
-                        seqInstance->setLUTInitial(true); // 标记为已放置
-                    }
-                    isSeqPlaceFinished = true;
-                }
+                neighbors = getNeighborTiles(x, y, 1); // 找下一个tile位置
             }
-            if (seqBankNum.size() == 2)
+            int rangeSide = 2;
+            while (!isSeqPlaceFinished)
             {
-                auto neighbors = getNeighborTile(x, y); // 找下一个tile位置
-                x = std::get<0>(neighbors);
-                y = std::get<1>(neighbors);
+                if (!neighbors.empty())
+                {
+                    x = std::get<0>(neighbors[0]);
+                    y = std::get<1>(neighbors[0]);
+                    tilePtr = chip.getTile(x, y);
+                    if (tilePtr == nullptr) // 跳过无效的 Tile
+                    {
+                        std::cout << "Error: Tile at (" << x << ", " << y << ") is invalid." << std::endl;
+                        continue;
+                    }
+
+                    if (!tilePtr->addSeqBank(bank))
+                    {
+                        neighbors.erase(neighbors.begin());
+                    }
+                    else
+                    {
+                        isSeqPlaceFinished = true;
+                        neighbors.clear();
+                    }
+                }
+                else
+                {
+                    neighbors = getNeighborTiles(x, y, rangeSide);
+                    rangeSide++;
+                }
             }
         }
     }
+
     return true; // 返回成功
 }
 
 // 比对PLB中的LUT的信息
 void printPLBInformation()
 {
-    // 遍历每个 PLB 组
-    // 检测数据
-    int totalLUTCOUNT = 0;
-    for (const auto &instpair : glbInstMap)
+    if (false)
     {
-        auto inst = instpair.second;
-        if (inst->getModelName().substr(0, 3) != "LUT")
+        // 遍历每个 PLB 组
+        // 检测数据
+        int totalLUTCOUNT = 0;
+        for (const auto &instpair : glbInstMap)
         {
-            continue;
+            auto inst = instpair.second;
+            if (inst->getModelName().substr(0, 3) != "LUT")
+            {
+                continue;
+            }
+            if (inst->getPLBGroupID() != -1)
+            {
+                totalLUTCOUNT++;
+            }
         }
-        if (inst->getPLBGroupID() != -1)
+        std::cout << "globalinstancemap 中 plbGroups 检测到的 LUT的数目 : " << totalLUTCOUNT << std::endl;
+        int totalLUTCount = 0;
+        for (const auto &plbPair : plbGroups)
         {
-            totalLUTCOUNT++;
+            if (plbPair.first == 922)
+            {
+                int dummy = 0;
+            }
+
+            const auto &lutGroupSet = plbPair.second;
+            int a = 0;
+            // 遍历每个 LUT 组
+            for (const auto &lutGroup : lutGroupSet)
+            {
+                totalLUTCount += lutGroup.size(); // 计算当前 LUT 组的大小
+                a += lutGroup.size();
+            }
+            // std::cout << a << std::endl;
         }
+        std::cout << "实际的 plbGroups 中LUT的数目 : " << totalLUTCount << std::endl;
+        std::cout << "plbGroups数目 : " << plbGroups.size() << std::endl;
     }
-    std::cout << "globalinstancemap 中 plbGroups 检测到的 LUT的数目 : " << totalLUTCOUNT << std::endl;
-    int totalLUTCount = 0;
-    for (const auto &plbPair : plbGroups)
-    {
-        if (plbPair.first == 922)
-        {
-            int dummy = 0;
-        }
-        
-        const auto &lutGroupSet = plbPair.second;
-        int a = 0;
-        // 遍历每个 LUT 组
-        for (const auto &lutGroup : lutGroupSet)
-        {
-            totalLUTCount += lutGroup.size(); // 计算当前 LUT 组的大小
-            a += lutGroup.size();
-        }
-        // std::cout << a << std::endl;
-    }
-    std::cout << "实际的 plbGroups 中LUT的数目 : " << totalLUTCount << std::endl;
-    std::cout << "plbGroups数目 : " << plbGroups.size() << std::endl;
 }
 
 // 打印instance信息
 void printInstanceInformation()
 {
-    int totalFixedInstance = 0;
-    int totalSeqMatchedInstance = 0;
-    // 遍历 glbInstMap 组
-    for (auto &inst : glbInstMap)
+    if (true)
     {
-        Instance *instance = inst.second;
-        if (instance->isFixed())
+        int totalLUTmatchedNum = 0;
+        for (auto &lutGroup : lutGroups)
         {
-            totalFixedInstance++;
+
+            if (lutGroup.second.size() == 2)
+            {
+                totalLUTmatchedNum++;
+            }
         }
-        if (instance->getSEQID() != -1)
-        {
-            totalSeqMatchedInstance++;
-        }
+        std::cout << lineBreaker << std::endl;
+        std::cout << "匹配的LUT组数目 : " << totalLUTmatchedNum << std::endl;
+        std::cout << "LUT组数目 : " << lutGroups.size() << std::endl;
+        std::cout << "seq组的数目 : " << seqPlacementMap.size() << std::endl;
+        std::cout << "glbPackInstMap 数目 : " << glbPackInstMap.size() << std::endl;
+        std::cout << "glbPackNetMap 数目 : " << glbPackNetMap.size() << std::endl;
+        std::cout << "glbNetMap 数目 : " << glbNetMap.size() << std::endl;
+        std::cout << lineBreaker << std::endl;
     }
-    std::cout << lineBreaker << std::endl;
-    std::cout << "固定的Instance数目 : " << totalFixedInstance << std::endl;
-    std::cout << "匹配完成的Seq数目 : " << totalSeqMatchedInstance << std::endl;
-    std::cout << "Seq组的数目 : " << seqPlacementMap.size() << std::endl;
-    std::cout << lineBreaker << std::endl;
+
+    if (false)
+    {
+        int totalFixedInstance = 0;
+        int totalSeqMatchedInstance = 0;
+        // 遍历 glbInstMap 组
+        for (auto &inst : glbInstMap)
+        {
+            Instance *instance = inst.second;
+            if (instance->isFixed())
+            {
+                totalFixedInstance++;
+            }
+            if (instance->getSEQID() != -1)
+            {
+                totalSeqMatchedInstance++;
+            }
+        }
+        std::cout << lineBreaker << std::endl;
+        std::cout << "固定的Instance数目 : " << totalFixedInstance << std::endl;
+        std::cout << "匹配完成的Seq数目 : " << totalSeqMatchedInstance << std::endl;
+        std::cout << "Seq组的数目 : " << seqPlacementMap.size() << std::endl;
+        std::cout << lineBreaker << std::endl;
+    }
 }
 
 bool compareOuterSets(const std::set<std::set<Instance *>> &a, const std::set<std::set<Instance *>> &b)
@@ -1935,114 +2053,363 @@ void sortPLBGrouptList(std::vector<std::set<std::set<Instance *>>> &nonFixedPLBG
 }
 
 // 获取上一个或下一个相邻的 Tile 位置，返回单个位置
-std::tuple<int, int> getNeighborTile(int x, int y)
+std::tuple<int, int> getNeighborTile(int x, int y, bool isLeft)
 {
-    // 检查 y 是否在有效范围内，返回下一个位置
-    if (y + 1 <= 299) // 确保不超出边界
+    while (true)
     {
-        return std::make_tuple(x, y + 1);
+        if (isLeft)
+        {
+            // 尝试向左移动
+            if (y + 1 <= 299)
+            {
+                if (isPLB[x][y + 1])
+                {
+                    return std::make_tuple(x, y + 1);
+                }
+                else
+                {
+                    y = y + 1;
+                }
+            }
+            else
+            {
+                // y 超出范围，重置 y 为最大值，并尝试 x - 1
+                if (x - 1 >= 0)
+                {
+                    if (isPLB[x - 1][0])
+                    {
+                        return std::make_tuple(x - 1, 0);
+                    }
+                    else
+                    {
+                        x = x - 1;
+                    }
+                }
+            }
+        }
+        else
+        {
+            // 尝试向右移动
+            if (y + 1 <= 299)
+            {
+                if (isPLB[x][y + 1])
+                {
+                    return std::make_tuple(x, y + 1);
+                }
+                else
+                {
+                    y = y + 1;
+                }
+            }
+            else
+            {
+
+                // y 超出范围，重置 y 为 0 并尝试 x + 1
+                if (x + 1 <= 149)
+                {
+                    if (isPLB[x + 1][y])
+                    {
+                        return std::make_tuple(x + 1, y);
+                    }
+                    else
+                    {
+                        x = x + 1;
+                    }
+                }
+            }
+        }
+    }
+
+    // // 超出范围，返回无效位置
+    // return std::make_tuple(-1, -1);
+}
+
+// 获取上一个或下一个相邻的 Tile 位置，返回单个位置
+std::vector<std::tuple<int, int>> getNeighborTiles(int x, int y, int rangeDesired)
+{
+    // 定义矩形框的左下角和右上角
+    int xl = x - rangeDesired, yl = y - rangeDesired, xr = x + rangeDesired, yr = y + rangeDesired;
+    int numCol = chip.getNumCol() - 1;
+    int numRow = chip.getNumRow() - 1;
+    // 判断不超出范围
+    if (xl < 0)
+        xl = 0;
+    if (yl < 0)
+        yl = 0;
+    if (xr > numCol)
+        xr = numCol;
+    if (yr > numRow)
+        yr = numRow;
+
+    // 生成矩形框内的所有坐标
+    std::vector<std::tuple<int, int>> coordinates;
+    for (int x = xl; x <= xr; ++x)
+    {
+        for (int y = yl; y <= yr; ++y)
+        {
+            if (isPLB[x][y])
+            {                                                    // 只加入PLB块
+                coordinates.emplace_back(std::make_tuple(x, y)); // 将坐标 (x, y) 加入向量
+            }
+        }
+    }
+    return coordinates;
+}
+
+int calculateTwoInstanceWireLength(Instance *inst1, Instance *inst2, bool isBaseLine)
+{
+    int totalWireLength = 0;
+    if (isBaseLine)
+    {
+        std::tuple<int, int, int> loc1 = inst1->getBaseLocation();
+        int x1 = std::get<0>(loc1);
+        int y1 = std::get<0>(loc1);
+        std::tuple<int, int, int> loc2 = inst1->getBaseLocation();
+        int x2 = std::get<0>(loc2);
+        int y2 = std::get<0>(loc2);
+        totalWireLength = abs(x1 - x2) + abs(y1 - y2);
     }
     else
     {
-        // 如果超出边界，可以返回一个默认值或处理方式
-        return std::make_tuple(x + 1, y); // 或者返回 std::make_tuple(-1, -1) 表示无效位置
+        std::tuple<int, int, int> loc1 = inst1->getLocation();
+        int x1 = std::get<0>(loc1);
+        int y1 = std::get<0>(loc1);
+        std::tuple<int, int, int> loc2 = inst1->getLocation();
+        int x2 = std::get<0>(loc2);
+        int y2 = std::get<0>(loc2);
+        totalWireLength = abs(x1 - x2) + abs(y1 - y2);
     }
+
+    return totalWireLength;
 }
 
+// 初始化 glbPackInstMap , 在完成LUT与SEQ的打包之后
+void initialGlbPackInstMap(bool isSeqPack)
+{
+    for (auto &entry : glbInstMap)
+    {
+        int instID = entry.first;
+        Instance *instance = entry.second;
+        // Instance *newInstance = new Instance();
 
-//如果存在 引脚数 > pinNum的netId 的net则返回true，id存储在 glbBigNet 中
-bool findBigNetId(int pinNumLimit){
-    bool hasBigNet = false;
-    glbBigNetPinNum = 0;
-    for(const auto& it : glbNetMap){
-        int netId = it.first;
-        Net* net = it.second;
-        if(net->isClock()){ //跳过clock 不参与线长计算
+        // 对 LUT 类型的 instance 处理
+        if (instance->getModelName().substr(0, 3) == "LUT" && !instance->isMapMatched())
+        {
+            glbPackInstMap.insert(std::make_pair(glbPackInstMap.size(), instance));
+            instance->setMapMatched(true);
+            instance->addMapInstID(instID);
+            int matchedID = instance->getMatchedLUTID();
+            if (matchedID != -1)
+            {
+                instance->addMapInstID(matchedID);
+                glbInstMap[matchedID]->setMapMatched(true);
+                Instance *tmp = glbInstMap[matchedID];
+                auto otherInputInstPinVec = tmp->getInpins();
+                instance->unionInputPins(otherInputInstPinVec);
+                auto otherOutputInstPinVec = tmp->getOutpins();
+                instance->unionOutputPins(otherOutputInstPinVec);
+            }
             continue;
         }
-        int pinNum = 1 + (net->getOutputPins()).size(); //+1是唯一的O_x 也就是这里唯一的inpin
-        if(pinNum > pinNumLimit){
-            glbBigNet.insert(netId);
-            glbBigNetPinNum += pinNum;
-        }
-    }
-    if(glbBigNetPinNum > 0) hasBigNet = true;
-    return hasBigNet;
-}
+        if (isSeqPack)
+        {
+            if (instance->getModelName().substr(0, 3) == "SEQ" && !instance->isMapMatched())
+            {
+                glbPackInstMap.insert(std::make_pair(glbPackInstMap.size(), instance));
 
-//提取node文件名
-std::string extractFileName(const std::string& filePath) {
-    size_t pos = filePath.find_last_of("/\\"); // 查找最后一个路径分隔符的位置
-    if (pos != std::string::npos) {
-        return filePath.substr(pos + 1);       // 返回文件名
-    }
-    return filePath;                           // 若没有分隔符，返回整个路径
-}
-
-bool fileExists(const std::string& filePath) {
-    std::ifstream file(filePath);
-    return file.good();
-}
-
-
-// 从 JSON 文件读取并解析数据到 NestedMap
-NestedMap readJsonFile(const std::string& filename) {
-    NestedMap data;
-    std::ifstream inputFile(filename);
-    if (!inputFile.is_open()) {
-        std::cerr << "Error opening file for reading." << filename << std::endl;
-        exit(1);
-    }
-
-    std::string line;
-    std::string outerKey, innerKey;
-    int value;
-
-    while (std::getline(inputFile, line)) {
-        // 查找外层键（例如："1"）
-        if (line.find("\"") != std::string::npos && line.find(": {") != std::string::npos) {
-            outerKey = line.substr(line.find("\"") + 1, line.rfind("\"") - line.find("\"") - 1);
-            data[outerKey] = {};
+                int seqGroupID = instance->getSEQID();
+                if (!seqPlacementMap.empty())
+                {
+                    std::vector<Instance *> seqVec = seqPlacementMap[seqGroupID].getSEQInstances();
+                    for (auto &seq_instance : seqVec)
+                    {
+                        // 检查指针是否为空，以防止空指针访问
+                        if (seq_instance)
+                        {
+                            // 对 instance 进行所需的修改
+                            seq_instance->setMapMatched(true);
+                            instance->addMapInstID(seq_instance->getInstID());
+                            instance->unionInputPins(seq_instance->getInpins());
+                            instance->unionOutputPins(seq_instance->getOutpins());
+                        }
+                    }
+                    continue;
+                }
+                else
+                {
+                    instance->setMapMatched(true);
+                    instance->addMapInstID(instance->getInstID());
+                }
+            }
         }
 
-        // 查找内层键值对（例如："60": 11）
-        if (line.find(":") != std::string::npos && line.find("{") == std::string::npos) {
-            size_t keyStart = line.find("\"") + 1;
-            size_t keyEnd = line.find("\"", keyStart);
-            innerKey = line.substr(keyStart, keyEnd - keyStart);
+        if (!instance->isMapMatched())
+        {
 
-            size_t valueStart = line.find(": ", keyEnd) + 2;
-            value = std::stoi(line.substr(valueStart));
-
-            data[outerKey][innerKey] = value;
+            glbPackInstMap.insert(std::make_pair(glbPackInstMap.size(), instance));
+            instance->setMapMatched(true);
+            instance->addMapInstID(instID);
         }
     }
-
-    inputFile.close();
-    return data;
 }
 
-// 将 NestedMap 写入到 JSON 文件
-void writeJsonFile(const std::string& filename, const NestedMap& data) {
-    std::ofstream outputFile(filename);
-    if (!outputFile.is_open()) {
-        std::cerr << "Error opening file for writing." << filename << std::endl;
-        exit(1);
-    }
-
-    outputFile << "{\n";
-    for (auto outerIt = data.begin(); outerIt != data.end(); ++outerIt) {
-        outputFile << "    \"" << outerIt->first << "\": {\n";
-        for (auto innerIt = outerIt->second.begin(); innerIt != outerIt->second.end(); ++innerIt) {
-            outputFile << "        \"" << innerIt->first << "\": " << innerIt->second;
-            if (std::next(innerIt) != outerIt->second.end()) outputFile << ",";
-            outputFile << "\n";
+void initialGlbPackNetMap()
+{
+    std::cout << " --- 生成新的glbPackNetMap ---" << std::endl;
+    int newNetPackID = 0;
+    for (auto iter : glbNetMap)
+    {
+        auto netID = iter.first;
+        auto net = iter.second;
+        oldNetID2newNetID.insert(std::make_pair(netID, newNetPackID)); // 建立旧netID到新netID的映射
+        // 处理InPin
+        auto currentInPin = net->getInpin();
+        if (currentInPin->getInstanceOwner()->getMapInstID().size() == 0)
+        {
+            continue;
         }
-        outputFile << "    }";
-        if (std::next(outerIt) != data.end()) outputFile << ",";
-        outputFile << "\n";
-    }
-    outputFile << "}\n";
 
-    outputFile.close();
+        Pin *newInPin = new Pin(newNetPackID, currentInPin->getProp(), currentInPin->getTimingCritical(), nullptr);
+        newInPin->setInstanceOwner(currentInPin->getInstanceOwner()->getPackInstance());
+
+        Net *newNet = new Net(newNetPackID);
+        newNet->setClock(net->isClock());
+        newNet->setInpin(newInPin);
+        for (auto currentOutPin : net->getOutputPins())
+        {
+            Pin *newOutPin = new Pin(newNetPackID, currentOutPin->getProp(), currentOutPin->getTimingCritical(), nullptr);
+            newOutPin->setInstanceOwner(currentOutPin->getInstanceOwner()->getPackInstance());
+            newNet->addPinIfUnique(newOutPin);
+            // auto inst = pin->getInstanceOwner();
+            int a = 0;
+        }
+
+        glbPackNetMap.insert(std::make_pair(newNetPackID, newNet));
+        newNetPackID++;
+        int a = 0;
+    }
+}
+
+// 还原最终结果映射
+void recoverAllMap(bool isSeqPack)
+{
+    std::cout << "还原所有映射" << std::endl;
+    for (auto inst : glbPackInstMap)
+    {
+        auto instance = inst.second;
+        auto location = instance->getLocation();
+        int x = std::get<0>(location);
+        int y = std::get<1>(location);
+        int z = std::get<2>(location);
+
+        if (isSeqPack)
+        {
+            if (instance->getModelName().substr(0, 3) == "SEQ")
+            {
+                auto instVec = instance->getMapInstID();
+                if (z == 0)
+                {
+                    for (int i = 0; i < instVec.size(); i++)
+                    {
+                        glbInstMap[instVec[i]]->setLocation(std::make_tuple(x, y, i));
+                    }
+                }
+                if (z == 1)
+                {
+                    for (int i = 0; i < instVec.size(); i++)
+                    {
+                        glbInstMap[instVec[i]]->setLocation(std::make_tuple(x, y, i + 8));
+                    }
+                }
+            }
+            else
+            {
+                auto instVec = instance->getMapInstID();
+                for (int i = 0; i < instVec.size(); i++)
+                {
+                    glbInstMap[instVec[i]]->setLocation(location);
+                }
+            }
+        }
+        else
+        {
+            auto instVec = instance->getMapInstID();
+            for (int i = 0; i < instVec.size(); i++)
+            {
+                glbInstMap[instVec[i]]->setLocation(location);
+            }
+        }
+    }
+}
+
+void processNet(int netID, Net *net, int &newNetPackID)
+{
+    {
+        std::lock_guard<std::mutex> lock(oldNetIDMutex); // 用互斥锁保护 oldNetID2newNetID 的访问
+        oldNetID2newNetID.insert(std::make_pair(netID, newNetPackID));
+    }
+
+    auto currentInPin = net->getInpin();
+    if (currentInPin->getInstanceOwner()->getMapInstID().size() == 0)
+    {
+        return;
+    }
+
+    Pin *newInPin = new Pin(newNetPackID, currentInPin->getProp(), currentInPin->getTimingCritical(), nullptr);
+    newInPin->setInstanceOwner(currentInPin->getInstanceOwner()->getPackInstance());
+
+    Net *newNet = new Net(newNetPackID);
+    newNet->setClock(net->isClock());
+    newNet->setInpin(newInPin);
+
+    for (auto currentOutPin : net->getOutputPins())
+    {
+        Pin *newOutPin = new Pin(newNetPackID, currentOutPin->getProp(), currentOutPin->getTimingCritical(), nullptr);
+        newOutPin->setInstanceOwner(currentOutPin->getInstanceOwner()->getPackInstance());
+        newNet->addPinIfUnique(newOutPin);
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(glbPackNetMapMutex); // 使用互斥锁保护对 glbPackNetMap 的访问
+        glbPackNetMap.insert(std::make_pair(newNetPackID, newNet));
+        newNetPackID++;
+    }
+}
+
+void initialGlbPackNetMap_multi_thread()
+{
+    std::cout << " --- 生成新的 glbPackNetMap ---" << std::endl;
+
+    // 获取系统的硬件线程数
+    unsigned int numThreads = std::thread::hardware_concurrency();
+    if (numThreads == 0)
+        numThreads = 8; // 如果无法检测到核心数，使用 8 作为默认值
+
+    // 使用线程池限制线程数量
+    std::vector<std::future<void>> futures;
+    int newNetPackID = 0;
+
+    for (auto iter : glbNetMap)
+    {
+        int netID = iter.first;
+        Net *net = iter.second;
+
+        // 将任务加入线程池
+        if (futures.size() >= numThreads)
+        {
+            for (auto &f : futures)
+            {
+                f.wait(); // 等待当前的任务完成
+            }
+            futures.clear();
+        }
+
+        futures.push_back(std::async(std::launch::async, processNet, netID, net, std::ref(newNetPackID)));
+    }
+
+    // 等待所有任务完成
+    for (auto &f : futures)
+    {
+        f.wait();
+    }
 }

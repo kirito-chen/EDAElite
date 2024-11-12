@@ -14,7 +14,7 @@ if [ -n "$1" ]; then
         echo "$program \"$input_nodes\" \"$input_nets\" \"$input_timing\" \"$output_nodes\""
     else
         $program "$input_nodes" "$input_nets" "$input_timing" "$output_nodes"
-        # ./checker/checker checker/case${case_number}.run
+        ./checker/checker checker/case${case_number}.run
     fi
 else
     # 清空Result文件夹

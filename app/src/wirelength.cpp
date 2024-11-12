@@ -129,3 +129,51 @@ int getHPWL(bool isBaseline){
 
   return HPWL;
 }
+
+
+//wbx 获取pack线长
+int getPackWirelength(bool isBaseline){
+  int totalCritWirelength = 0;
+  int totalWirelength = 0;
+  for (auto iter : glbPackNetMap)
+  {
+    Net *net = iter.second;
+    if (net->isClock())
+    {
+      continue;
+    }
+    totalCritWirelength += net->getCritWireLength(isBaseline);
+    totalWirelength += net->getNonCritWireLength(isBaseline);
+  }
+
+  // append critical wirelength to total wirelength
+  totalWirelength += totalCritWirelength;
+  return totalWirelength;
+}
+
+
+// cjq modify 获取inst相关net的线长
+int getPackRelatedWirelength(bool isBaseline, const std::set<int>& instRelatedNetId){  
+  int totalCritWirelength = 0;
+  int totalWirelength = 0;
+  for (int i : instRelatedNetId)
+  {
+    if(glbPackNetMap.count(i) > 0){
+      Net *net = glbPackNetMap[i];
+      if (net->isClock())
+      {
+        continue;
+      }
+      
+      totalCritWirelength += net->getCritWireLength(isBaseline);
+      totalWirelength += net->getNonCritWireLength(isBaseline);
+    }
+    else{
+      std::cout<<"getPackRelatedWirelength can not find this netId:"<<i<<std::endl;
+    }
+  }
+
+  // append critical wirelength to total wirelength
+  totalWirelength += totalCritWirelength;
+  return totalWirelength;
+}
