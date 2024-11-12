@@ -16,3 +16,6 @@ analysis
 analysis
 *.json
 *.csv
+0_Result_Graph
+linshiwenjian
+net.py
