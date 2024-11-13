@@ -55,3 +55,9 @@ using NestedMap = std::map<std::string, std::map<std::string, int>>;
 bool fileExists(const std::string& filePath);
 NestedMap readJsonFile(const std::string& filename);
 void writeJsonFile(const std::string& filename, const NestedMap& data);
+bool findPackBigNetId(int pinNumLimit);
+
+
+
+
+

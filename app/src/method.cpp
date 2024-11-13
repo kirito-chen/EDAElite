@@ -14,6 +14,10 @@
 
 bool isLUTType(const std::string &modelName);
 
+// 参数设置，线长限制和共享网络限制
+#define WIRELIMIT 2
+#define SHARENETCOUNT 2
+
 // 定义新的实例ID生成器
 int generateNewInstanceID()
 {
@@ -507,7 +511,7 @@ void matchLUTPairsThread(std::map<int, Instance *> &glbInstMap, std::vector<int>
                          std::unordered_map<int, std::unordered_set<int>> &lutNetMap,
                          std::unordered_map<int, std::unordered_set<int>> &netLUTMap, int start, int end)
 {
-    int wireLimit = 1; // 线长限制，默认为2
+    // int wireLimit = 2; // 线长限制，默认为2
     while (start < end)
     {
         int bestMatchedLUTID = -1;
@@ -541,7 +545,7 @@ void matchLUTPairsThread(std::map<int, Instance *> &glbInstMap, std::vector<int>
 
                 // 距离限制判断
                 int twoinstwirelength = calculateTwoInstanceWireLength(currentLUT, otherLUT, false);
-                if (twoinstwirelength >= wireLimit)
+                if (twoinstwirelength >= WIRELIMIT)
                 {
                     continue;
                 }
@@ -569,19 +573,19 @@ void matchLUTPairsThread(std::map<int, Instance *> &glbInstMap, std::vector<int>
                 std::unordered_set<int> unionPins = unionSets(currentLUTNets, otherLUTNets);
                 int totalInpins = unionPins.size();
 
-                // // 完全匹配模式
-                // if (sharedNetCount > maxSharedNets && totalInpins == inputPinNum && currentLUTNets.size() == otherLUTNets.size())
-                // {
-                //     maxSharedNets = sharedNetCount;
-                //     bestMatchedLUTID = otherLUTID;
-                // }
-
-                // 最大匹配模式
-                if (sharedNetCount > maxSharedNets && totalInpins <= 6 && sharedNetCount > 1)
+                // 完全匹配模式
+                if (sharedNetCount > maxSharedNets && totalInpins == inputPinNum && currentLUTNets.size() == otherLUTNets.size() && sharedNetCount == currentLUTNets.size())
                 {
                     maxSharedNets = sharedNetCount;
                     bestMatchedLUTID = otherLUTID;
                 }
+
+                // // 最大匹配模式
+                // if (sharedNetCount > maxSharedNets && totalInpins <= 6 && sharedNetCount > SHARENETCOUNT)
+                // {
+                //     maxSharedNets = sharedNetCount;
+                //     bestMatchedLUTID = otherLUTID;
+                // }
             }
         }
 
@@ -688,7 +692,7 @@ void matchLUTPairs(std::map<int, Instance *> &glbInstMap, bool isLutPack, bool i
     reportWirelength();
 
     initialGlbPackInstMap(isSeqPack); // 初始化 glbPackInstMap
-
+    
     // 获取起始时间点
     auto start = std::chrono::high_resolution_clock::now();
 
@@ -2281,12 +2285,12 @@ void initialGlbPackNetMap()
             newOutPin->setInstanceOwner(currentOutPin->getInstanceOwner()->getPackInstance());
             newNet->addPinIfUnique(newOutPin);
             // auto inst = pin->getInstanceOwner();
-            int a = 0;
+
         }
 
         glbPackNetMap.insert(std::make_pair(newNetPackID, newNet));
         newNetPackID++;
-        int a = 0;
+
     }
 }
 
@@ -2483,6 +2487,26 @@ bool findBigNetId(int pinNumLimit){
     bool hasBigNet = false;
     glbBigNetPinNum = 0;
     for(const auto& it : glbNetMap){
+        int netId = it.first;
+        Net* net = it.second;
+        if(net->isClock()){ //跳过clock 不参与线长计算
+            continue;
+        }
+        int pinNum = 1 + (net->getOutputPins()).size(); //+1是唯一的O_x 也就是这里唯一的inpin
+        if(pinNum > pinNumLimit){
+            glbBigNet.insert(netId);
+            glbBigNetPinNum += pinNum;
+        }
+    }
+    if(glbBigNetPinNum > 0) hasBigNet = true;
+    return hasBigNet;
+}
+
+//如果存在 引脚数 > pinNum的netId 的net则返回true，id存储在 glbBigNet 中
+bool findPackBigNetId(int pinNumLimit){
+    bool hasBigNet = false;
+    glbBigNetPinNum = 0;
+    for(const auto& it : glbPackNetMap){
         int netId = it.first;
         Net* net = it.second;
         if(net->isClock()){ //跳过clock 不参与线长计算

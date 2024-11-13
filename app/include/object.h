@@ -8,6 +8,7 @@
 #include <set>    // 包含对 std::set 的支持
 #include <limits>
 #include <algorithm>
+#include <unordered_set>
 
 // PLB slots
 #define MAX_LUT_CAPACITY 8
@@ -416,6 +417,8 @@ class Net
     std::vector<int> netArea; // net 的最小外包矩形
     int originID;             // 原始的netID，用于找instance的pin的新的netID
 
+    std::unordered_set<int> instanceOwnerIDs; // 用于快速查找已添加的 instanceOwner ID
+
 public:
     Net(int netID) : id(netID), clock(false), inpin(nullptr)
     {
@@ -442,8 +445,8 @@ public:
     void setInpin(Pin *pin) { inpin = pin; }
 
     // Getter and setter for outputPins
-    std::list<Pin*>& getOutputPins() { return outputPins; }
-    void addOutputPin(Pin* pin) { outputPins.push_back(pin); }
+    std::list<Pin *> &getOutputPins() { return outputPins; }
+    void addOutputPin(Pin *pin) { outputPins.push_back(pin); }
 
     int setNetHPWL(bool isBaseline); // cjq 设置每个net的半周线长
     int getCritHPWL() { return critHPWL; }
@@ -471,18 +474,16 @@ public:
         // 获取 newPin 的 instanceOwner 的 ID
         int newID = newPin->getInstanceOwner()->getInstID();
 
-        // 检查是否已经有相同 ID 的 instanceOwner 在列表中
-        for (const auto &pin : outputPins)
+        // 检查是否已存在相同 ID 的 instanceOwner
+        if (instanceOwnerIDs.find(newID) != instanceOwnerIDs.end())
         {
-            if (pin->getInstanceOwner()->getInstID() == newID)
-            {
-                // 已经有相同的 instanceOwner ID，跳过添加
-                return;
-            }
+            // 已经有相同的 instanceOwner ID，跳过添加
+            return;
         }
 
-        // 如果没有找到相同 ID，添加新的 Pin
+        // 添加新的 Pin
         outputPins.push_back(newPin);
+        instanceOwnerIDs.insert(newID);  // 将新的 ID 添加到查找集合中
     }
 };
 

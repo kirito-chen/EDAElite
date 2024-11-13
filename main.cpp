@@ -79,12 +79,11 @@ int main(int argc, char *argv[])
     }
     std::cout << "  Successfully read design files." << std::endl;
 
-    // 设置isPLB数组
-    setIsPLB();
-
     // 基于baseline修改
     bool isBaseline = false;
     bool isSeqPack = false;
+
+    setIsPLB(); // 设置isPLB数组
 
     reportDesignStatistics();
 
@@ -92,7 +91,9 @@ int main(int argc, char *argv[])
     {
         setPinDensityMapAndTopValues();
         arbsa(isBaseline, nodesFile);
-        
+        // 生成结果
+        generateOutputFile(isBaseline, outFile);
+
         // free memory before exit
         for (auto &lib : glbLibMap)
         {
@@ -110,14 +111,16 @@ int main(int argc, char *argv[])
     else
     {
         readOutputNetlist(nodesFile);
+        setPinDensityMapAndTopValues();
 
         matchLUTPairs(glbInstMap, true, isSeqPack); // 打包代码
         printInstanceInformation();
         // 模拟退火
-        newArbsa(isBaseline, isSeqPack);
+        newArbsa(isBaseline, nodesFile, isSeqPack);
+        // newArbsa_Jiu(isBaseline, isSeqPack);
+        // 生成结果
+        generateOutputFile(isBaseline, outFile);
     }
-    // 生成结果
-    generateOutputFile(isBaseline, outFile);
 
     if (false)
     {
