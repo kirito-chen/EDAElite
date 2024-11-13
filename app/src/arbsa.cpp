@@ -885,7 +885,7 @@ int arbsa(bool isBaseline, std::string nodesFile){
                 }
                 instRelatedNetId.insert(pin->getNetID());
             }
-            
+            if(instHasBigNet) hitBigNet ++;
             // 计算移动后的newCost
             std::tuple<int, int, int> loc = std::make_tuple(x, y, z);
             std::tuple<int, int, int> originLoc;
