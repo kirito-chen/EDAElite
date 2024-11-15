@@ -12,3 +12,4 @@ getFlameGraph.sh
 analysis
 *.bin
 *.json
+*.csv
