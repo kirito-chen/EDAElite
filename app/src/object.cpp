@@ -698,7 +698,8 @@ std::set<int> Tile::getConnectedLutSeqInput(bool isBaseline)
           //   continue;
           // }
           int netID = pin->getNetID();
-          if (netID < 0)
+          // if (netID < 0 || (glbBigNetPinNum > 0 && glbBigNet.find(netID) != glbBigNet.end())) //cjq modify 忽略bigNet
+          if (netID < 0) 
           { // unconnected pin
             continue;
           }
@@ -778,7 +779,8 @@ std::set<int> Tile::getConnectedLutSeqOutput(bool isBaseline)
         {
           Pin *pin = instPtr->getOutpin(i);
           int netID = pin->getNetID();
-          if (netID < 0)
+          // if (netID < 0 || (glbBigNetPinNum > 0 && glbBigNet.find(netID) != glbBigNet.end())) //cjq modify 忽略bigNet
+          if (netID < 0 )
           { // unconnected pin
             continue;
           }

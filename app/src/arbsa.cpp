@@ -1,5 +1,6 @@
 #include <iomanip>
 #include "global.h"
+#include "method.h"
 #include "object.h"
 #include "arbsa.h"
 #include "method.h"
@@ -7,9 +8,14 @@
 #include <cmath>
 #include "wirelength.h"
 #include <random>
-#include "binary.h"
+#include "pindensity.h"
+// 计时
+#include <chrono>
 
 // #define DEBUG
+// #define EXTERITER  //是否固定外部循环次数
+// #define INFO  //是否输出每次的迭代信息
+#define TIME_LIMIT 1180
 
 // 全局随机数生成器
 std::mt19937& get_random_engine() {
@@ -155,10 +161,6 @@ int calculRelatedFitness(std::vector<std::pair<int,float>>& fitnessVec, std::map
     // 计算fitness
     int n = fitnessVec.size();
     for(auto netId : instRelatedNetId){
-        if(glbNetMap.count(netId) <= 0){
-            std::cout<<"calculRelatedFitness can not find this netId:"<<netId<<std::endl;
-            continue;
-        }
         int index = -1; 
         //找到匹配netId的下标
         for (int i = 0; i < fitnessVec.size(); ++i) {
@@ -167,10 +169,12 @@ int calculRelatedFitness(std::vector<std::pair<int,float>>& fitnessVec, std::map
                 break;
             }
         }
+        #ifdef DEBUG
         if(index == -1){
             std::cout<<"can not find this netId: "<<netId <<", something may be wrong"<<std::endl;
             exit(1);
         }
+        #endif
         int rangeDesired = rangeDesiredMap[netId];
         int rangeActual = rangeActualMap[netId];
         float fitness;
@@ -205,7 +209,7 @@ int selectNetId(std::vector<std::pair<int,float>>& fitnessVec){
 
     //跳过bigNet
     if(glbBigNetPinNum > 0){
-        while(glbBigNet.count(netId)){
+        while(glbBigNet.find(netId) != glbBigNet.end()){
             a = generate_random_int(0, n - 1); // 范围在 0 到 n - 1
             b = generate_random_int(0, n - 1);
             index = std::min(a, b);
@@ -566,8 +570,83 @@ int changeTile(bool isBaseline, std::tuple<int, int, int> originLoc, std::tuple<
     return 0;
 }
 
-int arbsa(bool isBaseline, std::string nodesFile, const std::chrono::time_point<std::chrono::high_resolution_clock>& allStart){
 
+//删除旧值，插入新值
+
+bool tryUpdatePinDensity(std::tuple<int,int,int> originLoc, std::tuple<int,int,int> loc){
+    int originLocIndex = std::get<0>(originLoc) * 1000 + std::get<1>(originLoc);
+    int locIndex = std::get<0>(loc) * 1000 + std::get<1>(loc);
+    //获取旧的pin密度
+    int oldOriginLocPD = 0;
+    int oldLocPD = 0;
+    auto itOrigin = std::find_if(glbPinDensity.begin(), glbPinDensity.end(), [originLocIndex](const std::pair<int, int>& p) {
+        return p.first == originLocIndex;
+    });
+    if (itOrigin != glbPinDensity.end()) {
+        oldOriginLocPD = itOrigin->second;
+    } 
+    auto it = std::find_if(glbPinDensity.begin(), glbPinDensity.end(), [locIndex](const std::pair<int, int>& p) {
+        return p.first == locIndex;
+    });
+    if (it != glbPinDensity.end()) {
+        oldLocPD = it->second;
+    } 
+
+    //获取新的pin密度分子
+    int newOriginLocPD = getPinDensityByXY(std::get<0>(originLoc), std::get<1>(originLoc));
+    int newLocPD = getPinDensityByXY(std::get<0>(loc), std::get<1>(loc));
+
+    //修改
+    if(itOrigin == glbPinDensity.end()){
+        glbPinDensity.emplace_back(std::make_pair(originLocIndex, newOriginLocPD));
+    }
+    else{
+        itOrigin->second = newOriginLocPD;
+    }
+    if(it == glbPinDensity.end()){
+        glbPinDensity.emplace_back(std::make_pair(locIndex, newLocPD));
+    }
+    else{
+        it->second = newLocPD;
+    }
+    
+
+    //排序
+    std::sort(glbPinDensity.begin(), glbPinDensity.end(), [](const std::pair<int, int>& a, const std::pair<int, int>& b) {
+        return a.second > b.second; // 按值降序排序
+    });
+    itOrigin = std::find_if(glbPinDensity.begin(), glbPinDensity.end(), [originLocIndex](const std::pair<int, int>& p) {
+        return p.first == originLocIndex;
+    });
+    it = std::find_if(glbPinDensity.begin(), glbPinDensity.end(), [locIndex](const std::pair<int, int>& p) {
+        return p.first == locIndex;
+    });
+
+
+    // 计算新和
+    int potentialSum = 0;
+    int i = 0;
+    for(auto& it : glbPinDensity){
+        if(i >= glbTopKNum){
+            break;
+        }
+        potentialSum += it.second;
+        i++;
+    }
+    
+    if (potentialSum > glbInitTopSum) {
+        //复原
+        itOrigin->second = oldOriginLocPD;
+        it->second = oldLocPD;
+        return false;
+    }
+    else{
+        //应用修改
+        return true;
+    }
+}
+
+int arbsa(bool isBaseline, std::string nodesFile){
     // 记录开始时间
     const std::chrono::time_point<std::chrono::high_resolution_clock> start = std::chrono::high_resolution_clock::now();
 
@@ -639,13 +718,21 @@ int arbsa(bool isBaseline, std::string nodesFile, const std::chrono::time_point<
         for(auto& pin: inst->getInpins()){
             int netId = pin->getNetID();
             //-1表示未连接
-            if(netId != -1) instRelatedNetId.insert(pin->getNetID());
+            if(netId == -1) continue;
+            if(glbBigNetPinNum > 0 && glbBigNet.find(netId) != glbBigNet.end()){
+                continue;
+            }
+            instRelatedNetId.insert(pin->getNetID());
         }
         //访问outputpin
         for(auto& pin: inst->getOutpins()){
             int netId = pin->getNetID();
             //-1表示未连接
-            if(netId != -1) instRelatedNetId.insert(pin->getNetID());
+            if(netId == -1) continue;
+            if(glbBigNetPinNum > 0 && glbBigNet.find(netId) != glbBigNet.end()){
+                continue;
+            }
+            instRelatedNetId.insert(pin->getNetID());
         }
         
         // 计算移动后的newCost
@@ -674,13 +761,47 @@ int arbsa(bool isBaseline, std::string nodesFile, const std::chrono::time_point<
         }
     }
 
+    //读取次数  data.json文件
+    std::string caseName = extractFileName(nodesFile);
+    int iterLimit = -1;
+    int iterTotal = 0;
+    const std::string filename = "data.json";
+    // 读取 JSON 文件内容
+    NestedMap jsonData;
+
+    if(fileExists(filename)){
+        jsonData = readJsonFile(filename);
+        if(jsonData[caseName].find(std::to_string(timeLimit)) != jsonData[caseName].end()){
+            //找到了参数
+            iterLimit = jsonData[caseName][std::to_string(timeLimit)];
+        }
+    }
+
+    //记录bigNet的cost
+    int bigNetCostPre = 0;
+    int bigNetCostCur = 0;
+    //设置引脚数超过该数字的net为bigNet
+    const int pinNumLimit = 5000; //5000
+    //填充有超过次数的bigNet
+    if(findBigNetId(pinNumLimit)){
+        //记录bigNet的cost
+        bigNetCostPre = getRelatedWirelength(isBaseline, glbBigNet);
+    }
+    int hitBigNet = 0; //统计修改影响bigNet的点数，用于更新bigNet的线长
+    int hitBigNetLimit = glbBigNetPinNum * 0.05; //引脚数的百分之二十
     //计算标准差
     double standardDeviation = calculateStandardDeviation(sigmaVecInit);
     
     if(standardDeviation != 0){
         T = 0.5 * standardDeviation;
     }
-
+    std::cout<<"[INFO] The simulated annealing algorithm starts "<< std::endl;
+    std::cout<<"[INFO] initial temperature T = "<< T <<", threshhold = "<<threashhold<<", alpha = "<<alpha<<
+             ", InnerIter = "<<InnerIter<<", seed ="<<seed << ", iterLimit ="<< iterLimit <<std::endl;
+#ifdef EXTERITER
+    int exterIter = 0;
+    int exterIterLimit = 10;
+#endif
     bool timeup = false;
     int epsilon = 1;  // 设置收敛阈值
     int iterTotal = 0;
@@ -750,28 +871,27 @@ int arbsa(bool isBaseline, std::string nodesFile, const std::chrono::time_point<
         }
         exterIter++;
         // 内层循环 小于内层迭代次数
-        while(iter < InnerIter){
+#ifdef EXTERITER
+        if(exterIter >= exterIterLimit){
+            break;
+        }
+        exterIter ++;
+#endif
+        // updatePinDensityMapAndTopValues(); //更新全局密度
+        while(Iter < InnerIter){
             /*********** 更新 bigNet cost **************/
             if(glbBigNetPinNum > 0 && hitBigNet >= hitBigNetLimit){
                 //更新bigNet
-                bigNetCostCur = getRelatedWirelength(isBaseline, glbBigNet, wirelengthType);
+                bigNetCostCur = getRelatedWirelength(isBaseline, glbBigNet);
                 cost = cost - bigNetCostPre + bigNetCostCur;
                 bigNetCostPre = bigNetCostCur;
                 hitBigNet = 0;
                 //顺带更新range与fitness
-                calculRelatedRangeMap(isBaseline, rangeActualMap, glbBigNet);
-                calculRelatedFitness(fitnessVec, rangeDesiredMap, rangeActualMap, glbBigNet);
+                // calculRelatedRangeMap(isBaseline, rangeActualMap, glbBigNet);
+                // calculRelatedFitness(fitnessVec, rangeDesiredMap, rangeActualMap, glbBigNet);
             }
-            /*********** 更新range与fitness **************/
-            // if(hitNet > hitNetLimit){
-            //     calculrangeMap(isBaseline, rangeActualMap);
-            //     calculFitness(fitnessVec, rangeDesiredMap, rangeActualMap);
-            //     sortedFitness(fitnessVec);
-            //     hitNet = 0;
-            // }
-            /********************************************/
 
-            if(iter % 100 == 0) {
+            if(Iter % 100 == 0) {
                 if(iterLimit > 0){
                     if(iterTotal >= iterLimit){
                         timeup = true;
@@ -784,15 +904,17 @@ int arbsa(bool isBaseline, std::string nodesFile, const std::chrono::time_point<
                     std::chrono::duration<double> durationtmp = tmp - start;
                     if(durationtmp.count() >= timeLimit){  //1180
                         timeup = true;
-                        if(!jsonData.count(std::to_string(caseNumber))){
+                        if(!jsonData.count(caseName)){
                             std::map<std::string, int> t;
-                            jsonData[std::to_string(caseNumber)] = t;
+                            jsonData[caseName] = t;
                         }
-                        jsonData[std::to_string(caseNumber)][std::to_string(timeLimit)] = iterTotal;
+                        jsonData[caseName][std::to_string(timeLimit)] = iterTotal;
                         break;
                     }
                 }
-                std::cout<<"[INFO] T:"<< std::scientific << std::setprecision(3) <<T <<" iter:"<<std::setw(4)<<iter<<" alpha:"<<std::fixed<<std::setprecision(2)<<alpha<<" cost:"<<std::setw(7)<<cost<<std::endl;
+                #ifdef INFO
+                std::cout<<"[INFO] T:"<< std::scientific << std::setprecision(3) <<T <<" iter:"<<std::setw(4)<<Iter<<" alpha:"<<std::fixed<<std::setprecision(2)<<alpha<<" cost:"<<std::setw(7)<<cost<<std::endl;
+                #endif
             }
             // std::cout<<"[INFO] T:"<< std::scientific << std::setprecision(3) <<T <<" iter:"<<std::setw(4)<<iter<<" alpha:"<<std::fixed<<std::setprecision(2)<<alpha<<" cost:"<<std::setw(7)<<cost<<std::endl;
             iter++;
@@ -856,7 +978,7 @@ int arbsa(bool isBaseline, std::string nodesFile, const std::chrono::time_point<
                 }
                 instRelatedNetIdMap[instId] = instRelatedNetId;  //记录下来。下次这个instId就不需要运算了
             }
-            
+            if(instHasBigNet) hitBigNet ++;
             // 计算移动后的newCost
             std::tuple<int, int, int> loc = std::make_tuple(x, y, z);
             std::tuple<int, int, int> originLoc;
@@ -878,43 +1000,30 @@ int arbsa(bool isBaseline, std::string nodesFile, const std::chrono::time_point<
             #ifdef DEBUG
                 std::cout<<"DEBUG-deta:"<<deta<<std::endl;
             #endif
+
+            //计算pin密度变化 tryUpdateAndCheck
+            //改变tile
+            changeTile(isBaseline, originLoc, loc, inst);
+
+            // 生成一个 0 到 1 之间的随机浮点数
+            double randomValue = generate_random_double(0.0, 1.0);
+            double eDetaT = exp(-deta/T);
             // if deta < 0 更新这个操作到布局中，更新fitness列表
-            if(deta < 0){
-                changeTile(isBaseline, originLoc, loc, inst);
+            if((deta < 0 || randomValue < eDetaT) && tryUpdatePinDensity(originLoc, loc)){
                 // 间隔次数多了再更新这两
-                calculRelatedRangeMap(isBaseline, rangeActualMap, instRelatedNetId);
-                calculRelatedFitness(fitnessVec, rangeDesiredMap, rangeActualMap, instRelatedNetId);
-                // hitNet ++; //需要更新range fitness
-                if(instHasBigNet) hitBigNet ++; //需要更新bigNet的线长
+                // calculRelatedRangeMap(isBaseline, rangeActualMap, instRelatedNetId);
+                // calculRelatedFitness(fitnessVec, rangeDesiredMap, rangeActualMap, instRelatedNetId);
                 cost = costNew;
                 sigmaVec.emplace_back(costNew);
-                
                 // sortedFitness(fitnessVec);
             }
             else{
-                // else 取(0,1)随机数，判断随机数是否小于 e^(-deta/T) 是则同样更新操作，更新fitness列表
-                // 生成一个 0 到 1 之间的随机浮点数
-                double randomValue = generate_random_double(0.0, 1.0);
-                double eDetaT = exp(-deta/T);
-                #ifdef DEBUG
-                    std::cout<<"DEBUG-randomValue:"<<randomValue<<", eDetaT:"<<eDetaT<<std::endl;
-                #endif
-                if(randomValue < eDetaT){
-                    changeTile(isBaseline, originLoc, loc, inst);
-                    // 间隔次数多了再更新这两
-                    calculRelatedRangeMap(isBaseline, rangeActualMap, instRelatedNetId);
-                    calculRelatedFitness(fitnessVec, rangeDesiredMap, rangeActualMap, instRelatedNetId);
-                    // hitNet ++; //需要更新range fitness
-                    if(instHasBigNet) hitBigNet ++; //需要更新bigNet的线长
-                    cost = costNew;
-                    sigmaVec.emplace_back(costNew);
-                }
-                else{ //复原
-                    if(isBaseline){
-                        inst->setBaseLocation(originLoc);
-                    } else{
-                        inst->setLocation(originLoc);
-                    }
+                //复原
+                changeTile(isBaseline, loc, originLoc, inst);
+                if(isBaseline){
+                    inst->setBaseLocation(originLoc);
+                } else{
+                    inst->setLocation(originLoc);
                 }
             }
              // counterNet 计数+1
@@ -945,7 +1054,6 @@ int arbsa(bool isBaseline, std::string nodesFile, const std::chrono::time_point<
         // 排序fitness列表
         sortedFitness(fitnessVec);
     }
-    
     //记录截止次数
     writeJsonFile(filename, jsonData);
     
@@ -956,10 +1064,10 @@ int arbsa(bool isBaseline, std::string nodesFile, const std::chrono::time_point<
     std::chrono::duration<double> duration = end - start;
 
     // 输出运行时间（单位为秒）
-    std::cout << "SA runtime: " << duration.count() << " s" << std::endl;
-    //计算平均每次运行时间
-    // std::cout << "runtime/iterLimit:" << duration.count() / (iterLimit-1) <<" runtime/iter:" << duration.count() / ((iterLimit-1)*2000)<< std::endl;
-     std::cout << "runtime/exterIterLimit:" << duration.count() / (exterIterLimit) <<" runtime/iter:" << duration.count() / ((exterIterLimit)*2000)<< std::endl;
+    std::cout << "runtime: " << duration.count() << " s" << std::endl;
+#ifdef EXTERITER
+    std::cout << "runtime/exterIterLimit:" << duration.count() / (exterIterLimit) <<" runtime/iter:" << duration.count() / ((exterIterLimit)*2000)<< std::endl;
+#endif
     return 0;
 }
 
