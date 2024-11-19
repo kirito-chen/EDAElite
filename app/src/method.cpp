@@ -547,6 +547,7 @@ void matchLUTPairsThread(std::map<int, Instance *> &glbInstMap, std::vector<int>
                 int twoinstwirelength = calculateTwoInstanceWireLength(currentLUT, otherLUT, false);
                 if (twoinstwirelength >= WIRELIMIT)
                 {
+                    int a = 0;
                     continue;
                 }
 
@@ -573,19 +574,19 @@ void matchLUTPairsThread(std::map<int, Instance *> &glbInstMap, std::vector<int>
                 std::unordered_set<int> unionPins = unionSets(currentLUTNets, otherLUTNets);
                 int totalInpins = unionPins.size();
 
-                // // 完全匹配模式
-                // if (sharedNetCount > maxSharedNets && totalInpins == inputPinNum && currentLUTNets.size() == otherLUTNets.size())
-                // {
-                //     maxSharedNets = sharedNetCount;
-                //     bestMatchedLUTID = otherLUTID;
-                // }
-
-                // 最大匹配模式
-                if (sharedNetCount > maxSharedNets && totalInpins <= 6 && sharedNetCount > 1)
+                // 完全匹配模式
+                if (sharedNetCount > maxSharedNets && totalInpins == inputPinNum && currentLUTNets.size() == otherLUTNets.size())
                 {
                     maxSharedNets = sharedNetCount;
                     bestMatchedLUTID = otherLUTID;
                 }
+
+                // // 最大匹配模式
+                // if (sharedNetCount > maxSharedNets && totalInpins <= 6 && sharedNetCount > 1)
+                // {
+                //     maxSharedNets = sharedNetCount;
+                //     bestMatchedLUTID = otherLUTID;
+                // }
             }
         }
 
@@ -678,11 +679,12 @@ void matchLUTPairs(std::map<int, Instance *> &glbInstMap, bool isLutPack, bool i
     }
     if (isLutPack)
     {
-        populateLUTGroups(glbInstMap);
-        refreshLUTGroups(lutGroups); // 这里会根据LUT组其中一个固定的位置修改另一个未固定的LUT位置并且将其固定
-        matchFixedLUTGroupsToPLB(lutGroups, plbGroups);
-        updatePLBLocations(plbGroups);
+        populateLUTGroups(glbInstMap);                  // LUT组匹配,将剩余未加入LUT组的LUT单独加入新的LUT组——已确定正确
+        refreshLUTGroups(lutGroups);                    // 这里会根据LUT组其中一个固定的位置修改另一个未固定的LUT位置并且将其固定
+        matchFixedLUTGroupsToPLB(lutGroups, plbGroups); // PLB打包，将LUT组打包成PLB组
+        updatePLBLocations(plbGroups);                  // 更新分配PLB组内部LUT的位置和编号，仅限PLB组内部有固定LUT的
     }
+    printInstanceInformation();
     if (isSeqPack)
     {
         initializeSEQPlacementMap(glbInstMap);
@@ -692,7 +694,7 @@ void matchLUTPairs(std::map<int, Instance *> &glbInstMap, bool isLutPack, bool i
     reportWirelength();
 
     initialGlbPackInstMap(isSeqPack); // 初始化 glbPackInstMap
-    
+
     // 获取起始时间点
     auto start = std::chrono::high_resolution_clock::now();
 
@@ -926,6 +928,7 @@ void matchFixedLUTGroupsToPLB(std::map<int, std::set<Instance *>> &lutGroups, st
             }
         }
     }
+    std::cout << "未分配PLBGroupID的组的数目 : " << unassignedLUTGroups.size() << std::endl;
 
     // 为未分配的LUT组创建新的PLB组——已经正确
     while (!unassignedLUTGroups.empty())
@@ -1763,7 +1766,7 @@ bool updateInstancesToTiles(bool isSeqPack)
             {
                 std::set<int> availableSitesInNewTile = {0, 1, 2, 3, 4, 5, 6, 7};
                 bool isfinished = false;
-                auto neighbors = getNeighborTile_Jiu(std::get<0>(newLocation), std::get<1>(newLocation)); // 找下一个tile位置
+                auto neighbors = getNeighborTile(std::get<0>(newLocation), std::get<1>(newLocation)); // 找下一个tile位置
                 while (!isfinished)
                 {
                     bool placed = false; // 标记是否成功放置
@@ -1812,7 +1815,7 @@ bool updateInstancesToTiles(bool isSeqPack)
                     }
                     else
                     {
-                        neighbors = getNeighborTile_Jiu(neighborX, neighborY);
+                        neighbors = getNeighborTile(neighborX, neighborY);
                         int dummy = 0;
                     }
                 }
@@ -1854,7 +1857,7 @@ bool updateInstancesToTiles(bool isSeqPack)
             else
             {
                 bool isfinished = false;
-                auto neighbors = getNeighborTile_Jiu(std::get<0>(newLocation), std::get<1>(newLocation), isLeft); // 找下一个tile位置
+                auto neighbors = getNeighborTile(std::get<0>(newLocation), std::get<1>(newLocation), isLeft); // 找下一个tile位置
                 while (!isfinished)
                 {
                     bool placed = false; // 标记是否成功放置
@@ -1883,7 +1886,7 @@ bool updateInstancesToTiles(bool isSeqPack)
                     }
                     else
                     {
-                        neighbors = getNeighborTile_Jiu(neighborX, neighborY);
+                        neighbors = getNeighborTile(neighborX, neighborY);
                         int dummy = 0;
                     }
                 }
@@ -2018,6 +2021,7 @@ void printInstanceInformation()
         std::cout << "glbPackInstMap 数目 : " << glbPackInstMap.size() << std::endl;
         std::cout << "glbPackNetMap 数目 : " << glbPackNetMap.size() << std::endl;
         std::cout << "glbNetMap 数目 : " << glbNetMap.size() << std::endl;
+        std::cout << "plbGroups 数目 : " << plbGroups.size() << std::endl;
         std::cout << lineBreaker << std::endl;
     }
 
@@ -2167,7 +2171,6 @@ std::tuple<int, int> getNeighborTile_Jiu(int x, int y, bool isLeft)
     return std::make_tuple(-1, -1);
 }
 
-
 // 获取上一个或下一个相邻的 Tile 位置，返回单个位置
 std::vector<std::tuple<int, int>> getNeighborTiles(int x, int y, int rangeDesired)
 {
@@ -2207,20 +2210,20 @@ int calculateTwoInstanceWireLength(Instance *inst1, Instance *inst2, bool isBase
     {
         std::tuple<int, int, int> loc1 = inst1->getBaseLocation();
         int x1 = std::get<0>(loc1);
-        int y1 = std::get<0>(loc1);
-        std::tuple<int, int, int> loc2 = inst1->getBaseLocation();
+        int y1 = std::get<1>(loc1);
+        std::tuple<int, int, int> loc2 = inst2->getBaseLocation();
         int x2 = std::get<0>(loc2);
-        int y2 = std::get<0>(loc2);
+        int y2 = std::get<1>(loc2);
         totalWireLength = abs(x1 - x2) + abs(y1 - y2);
     }
     else
     {
         std::tuple<int, int, int> loc1 = inst1->getLocation();
         int x1 = std::get<0>(loc1);
-        int y1 = std::get<0>(loc1);
-        std::tuple<int, int, int> loc2 = inst1->getLocation();
+        int y1 = std::get<1>(loc1);
+        std::tuple<int, int, int> loc2 = inst2->getLocation();
         int x2 = std::get<0>(loc2);
-        int y2 = std::get<0>(loc2);
+        int y2 = std::get<1>(loc2);
         totalWireLength = abs(x1 - x2) + abs(y1 - y2);
     }
 
@@ -2325,12 +2328,10 @@ void initialGlbPackNetMap()
             newOutPin->setInstanceOwner(currentOutPin->getInstanceOwner()->getPackInstance());
             newNet->addPinIfUnique(newOutPin);
             // auto inst = pin->getInstanceOwner();
-
         }
 
         glbPackNetMap.insert(std::make_pair(newNetPackID, newNet));
         newNetPackID++;
-
     }
 }
 
@@ -2423,37 +2424,45 @@ void recoverAllMap(bool isSeqPack)
     }
 }
 
-//提取node文件名
-std::string extractFileName(const std::string& filePath) {
+// 提取node文件名
+std::string extractFileName(const std::string &filePath)
+{
     size_t pos = filePath.find_last_of("/\\"); // 查找最后一个路径分隔符的位置
-    if (pos != std::string::npos) {
-        return filePath.substr(pos + 1);       // 返回文件名
+    if (pos != std::string::npos)
+    {
+        return filePath.substr(pos + 1); // 返回文件名
     }
-    return filePath;                           // 若没有分隔符，返回整个路径
+    return filePath; // 若没有分隔符，返回整个路径
 }
-bool fileExists(const std::string& filePath) {
+bool fileExists(const std::string &filePath)
+{
     std::ifstream file(filePath);
     return file.good();
 }
 // 从 JSON 文件读取并解析数据到 NestedMap
-NestedMap readJsonFile(const std::string& filename) {
+NestedMap readJsonFile(const std::string &filename)
+{
     NestedMap data;
     std::ifstream inputFile(filename);
-    if (!inputFile.is_open()) {
+    if (!inputFile.is_open())
+    {
         std::cerr << "Error opening file for reading." << filename << std::endl;
         exit(1);
     }
     std::string line;
     std::string outerKey, innerKey;
     int value;
-    while (std::getline(inputFile, line)) {
+    while (std::getline(inputFile, line))
+    {
         // 查找外层键（例如："1"）
-        if (line.find("\"") != std::string::npos && line.find(": {") != std::string::npos) {
+        if (line.find("\"") != std::string::npos && line.find(": {") != std::string::npos)
+        {
             outerKey = line.substr(line.find("\"") + 1, line.rfind("\"") - line.find("\"") - 1);
             data[outerKey] = {};
         }
         // 查找内层键值对（例如："60": 11）
-        if (line.find(":") != std::string::npos && line.find("{") == std::string::npos) {
+        if (line.find(":") != std::string::npos && line.find("{") == std::string::npos)
+        {
             size_t keyStart = line.find("\"") + 1;
             size_t keyEnd = line.find("\"", keyStart);
             innerKey = line.substr(keyStart, keyEnd - keyStart);
@@ -2466,65 +2475,80 @@ NestedMap readJsonFile(const std::string& filename) {
     return data;
 }
 // 将 NestedMap 写入到 JSON 文件
-void writeJsonFile(const std::string& filename, const NestedMap& data) {
+void writeJsonFile(const std::string &filename, const NestedMap &data)
+{
     std::ofstream outputFile(filename);
-    if (!outputFile.is_open()) {
+    if (!outputFile.is_open())
+    {
         std::cerr << "Error opening file for writing." << filename << std::endl;
         exit(1);
     }
     outputFile << "{\n";
-    for (auto outerIt = data.begin(); outerIt != data.end(); ++outerIt) {
+    for (auto outerIt = data.begin(); outerIt != data.end(); ++outerIt)
+    {
         outputFile << "    \"" << outerIt->first << "\": {\n";
-        for (auto innerIt = outerIt->second.begin(); innerIt != outerIt->second.end(); ++innerIt) {
+        for (auto innerIt = outerIt->second.begin(); innerIt != outerIt->second.end(); ++innerIt)
+        {
             outputFile << "        \"" << innerIt->first << "\": " << innerIt->second;
-            if (std::next(innerIt) != outerIt->second.end()) outputFile << ",";
+            if (std::next(innerIt) != outerIt->second.end())
+                outputFile << ",";
             outputFile << "\n";
         }
         outputFile << "    }";
-        if (std::next(outerIt) != data.end()) outputFile << ",";
+        if (std::next(outerIt) != data.end())
+            outputFile << ",";
         outputFile << "\n";
     }
     outputFile << "}\n";
     outputFile.close();
 }
 
-//如果存在 引脚数 > pinNum的netId 的net则返回true，id存储在 glbBigNet 中
-bool findBigNetId(int pinNumLimit){
+// 如果存在 引脚数 > pinNum的netId 的net则返回true，id存储在 glbBigNet 中
+bool findBigNetId(int pinNumLimit)
+{
     bool hasBigNet = false;
     glbBigNetPinNum = 0;
-    for(const auto& it : glbNetMap){
+    for (const auto &it : glbNetMap)
+    {
         int netId = it.first;
-        Net* net = it.second;
-        if(net->isClock()){ //跳过clock 不参与线长计算
+        Net *net = it.second;
+        if (net->isClock())
+        { // 跳过clock 不参与线长计算
             continue;
         }
         int pinNum = 1 + (net->getOutputPins()).size(); //+1是唯一的O_x 也就是这里唯一的inpin
-        if(pinNum > pinNumLimit){
+        if (pinNum > pinNumLimit)
+        {
             glbBigNet.insert(netId);
             glbBigNetPinNum += pinNum;
         }
     }
-    if(glbBigNetPinNum > 0) hasBigNet = true;
+    if (glbBigNetPinNum > 0)
+        hasBigNet = true;
     return hasBigNet;
 }
 
-//如果存在 引脚数 > pinNum的netId 的net则返回true，id存储在 glbBigNet 中
-bool findPackBigNetId(int pinNumLimit){
+// 如果存在 引脚数 > pinNum的netId 的net则返回true，id存储在 glbBigNet 中
+bool findPackBigNetId(int pinNumLimit)
+{
     bool hasBigNet = false;
     glbBigNetPinNum = 0;
-    for(const auto& it : glbPackNetMap){
+    for (const auto &it : glbPackNetMap)
+    {
         int netId = it.first;
-        Net* net = it.second;
-        if(net->isClock()){ //跳过clock 不参与线长计算
+        Net *net = it.second;
+        if (net->isClock())
+        { // 跳过clock 不参与线长计算
             continue;
         }
         int pinNum = 1 + (net->getOutputPins()).size(); //+1是唯一的O_x 也就是这里唯一的inpin
-        if(pinNum > pinNumLimit){
+        if (pinNum > pinNumLimit)
+        {
             glbBigNet.insert(netId);
             glbBigNetPinNum += pinNum;
         }
     }
-    if(glbBigNetPinNum > 0) hasBigNet = true;
+    if (glbBigNetPinNum > 0)
+        hasBigNet = true;
     return hasBigNet;
 }
-

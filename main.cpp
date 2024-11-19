@@ -116,10 +116,10 @@ int main(int argc, char *argv[])
         matchLUTPairs(glbInstMap, true, isSeqPack); // 打包代码
         printInstanceInformation();
         // 模拟退火
-        // newArbsa(isBaseline, nodesFile, isSeqPack);
+        newArbsa(isBaseline, nodesFile, isSeqPack);
 
         // 旧的模拟退火
-        newArbsa_Jiu(isBaseline, isSeqPack);
+        // newArbsa_Jiu(isBaseline, isSeqPack);
         
         // 生成结果
         generateOutputFile(isBaseline, outFile);
