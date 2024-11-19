@@ -79,7 +79,7 @@ int main(int argc, char *argv[])
     }
     std::cout << "  Successfully read design files." << std::endl;
 
-    // 基于baseline修改
+    // 基于baseline修改 true
     bool isBaseline = false;
     bool isSeqPack = false;
 
@@ -111,13 +111,16 @@ int main(int argc, char *argv[])
     else
     {
         readOutputNetlist(nodesFile);
-        setPinDensityMapAndTopValues();
+        // setPinDensityMapAndTopValues();
 
         matchLUTPairs(glbInstMap, true, isSeqPack); // 打包代码
         printInstanceInformation();
         // 模拟退火
-        newArbsa(isBaseline, nodesFile, isSeqPack);
-        // newArbsa_Jiu(isBaseline, isSeqPack);
+        // newArbsa(isBaseline, nodesFile, isSeqPack);
+
+        // 旧的模拟退火
+        newArbsa_Jiu(isBaseline, isSeqPack);
+        
         // 生成结果
         generateOutputFile(isBaseline, outFile);
     }

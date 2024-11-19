@@ -16,7 +16,7 @@ bool isLUTType(const std::string &modelName);
 
 // 参数设置，线长限制和共享网络限制
 #define WIRELIMIT 2
-#define SHARENETCOUNT 2
+#define SHARENETCOUNT 1
 
 // 定义新的实例ID生成器
 int generateNewInstanceID()
@@ -573,19 +573,19 @@ void matchLUTPairsThread(std::map<int, Instance *> &glbInstMap, std::vector<int>
                 std::unordered_set<int> unionPins = unionSets(currentLUTNets, otherLUTNets);
                 int totalInpins = unionPins.size();
 
-                // 完全匹配模式
-                if (sharedNetCount > maxSharedNets && totalInpins == inputPinNum && currentLUTNets.size() == otherLUTNets.size() && sharedNetCount == currentLUTNets.size())
-                {
-                    maxSharedNets = sharedNetCount;
-                    bestMatchedLUTID = otherLUTID;
-                }
-
-                // // 最大匹配模式
-                // if (sharedNetCount > maxSharedNets && totalInpins <= 6 && sharedNetCount > SHARENETCOUNT)
+                // // 完全匹配模式
+                // if (sharedNetCount > maxSharedNets && totalInpins == inputPinNum && currentLUTNets.size() == otherLUTNets.size())
                 // {
                 //     maxSharedNets = sharedNetCount;
                 //     bestMatchedLUTID = otherLUTID;
                 // }
+
+                // 最大匹配模式
+                if (sharedNetCount > maxSharedNets && totalInpins <= 6 && sharedNetCount > 1)
+                {
+                    maxSharedNets = sharedNetCount;
+                    bestMatchedLUTID = otherLUTID;
+                }
             }
         }
 
@@ -698,7 +698,7 @@ void matchLUTPairs(std::map<int, Instance *> &glbInstMap, bool isLutPack, bool i
 
     // 执行要测量的函数
     initialGlbPackNetMap();
-    // initialGlbPackNetMap_multi_thread();
+    // initialGlbPackNetMap_Jiu();
 
     // 获取结束时间点
     auto end = std::chrono::high_resolution_clock::now();
@@ -1763,7 +1763,7 @@ bool updateInstancesToTiles(bool isSeqPack)
             {
                 std::set<int> availableSitesInNewTile = {0, 1, 2, 3, 4, 5, 6, 7};
                 bool isfinished = false;
-                auto neighbors = getNeighborTile(std::get<0>(newLocation), std::get<1>(newLocation)); // 找下一个tile位置
+                auto neighbors = getNeighborTile_Jiu(std::get<0>(newLocation), std::get<1>(newLocation)); // 找下一个tile位置
                 while (!isfinished)
                 {
                     bool placed = false; // 标记是否成功放置
@@ -1812,7 +1812,7 @@ bool updateInstancesToTiles(bool isSeqPack)
                     }
                     else
                     {
-                        neighbors = getNeighborTile(neighborX, neighborY);
+                        neighbors = getNeighborTile_Jiu(neighborX, neighborY);
                         int dummy = 0;
                     }
                 }
@@ -1854,7 +1854,7 @@ bool updateInstancesToTiles(bool isSeqPack)
             else
             {
                 bool isfinished = false;
-                auto neighbors = getNeighborTile(std::get<0>(newLocation), std::get<1>(newLocation), isLeft); // 找下一个tile位置
+                auto neighbors = getNeighborTile_Jiu(std::get<0>(newLocation), std::get<1>(newLocation), isLeft); // 找下一个tile位置
                 while (!isfinished)
                 {
                     bool placed = false; // 标记是否成功放置
@@ -1883,7 +1883,7 @@ bool updateInstancesToTiles(bool isSeqPack)
                     }
                     else
                     {
-                        neighbors = getNeighborTile(neighborX, neighborY);
+                        neighbors = getNeighborTile_Jiu(neighborX, neighborY);
                         int dummy = 0;
                     }
                 }
@@ -2128,6 +2128,46 @@ std::tuple<int, int> getNeighborTile(int x, int y, bool isLeft)
     // return std::make_tuple(-1, -1);
 }
 
+std::tuple<int, int> getNeighborTile_Jiu(int x, int y, bool isLeft)
+{
+    if (isLeft)
+    {
+        // 尝试向左移动
+        if (y + 1 <= 299)
+        {
+            return std::make_tuple(x, y + 1);
+        }
+        else
+        {
+            // y 超出范围，重置 y 为最大值，并尝试 x - 1
+            if (x - 1 >= 0)
+            {
+                return std::make_tuple(x - 1, 0);
+            }
+        }
+    }
+    else
+    {
+        // 尝试向右移动
+        if (y + 1 <= 299)
+        {
+            return std::make_tuple(x, y + 1);
+        }
+        else
+        {
+            // y 超出范围，重置 y 为 0 并尝试 x + 1
+            if (x + 1 <= 149)
+            {
+                return std::make_tuple(x + 1, y);
+            }
+        }
+    }
+
+    // 超出范围，返回无效位置
+    return std::make_tuple(-1, -1);
+}
+
+
 // 获取上一个或下一个相邻的 Tile 位置，返回单个位置
 std::vector<std::tuple<int, int>> getNeighborTiles(int x, int y, int rangeDesired)
 {
@@ -2294,6 +2334,43 @@ void initialGlbPackNetMap()
     }
 }
 
+void initialGlbPackNetMap_Jiu()
+{
+    std::cout << " --- 生成新的glbPackNetMap ---" << std::endl;
+    int newNetPackID = 0;
+    for (auto iter : glbNetMap)
+    {
+        auto netID = iter.first;
+        auto net = iter.second;
+        oldNetID2newNetID.insert(std::make_pair(netID, newNetPackID)); // 建立旧netID到新netID的映射
+        // 处理InPin
+        auto currentInPin = net->getInpin();
+        if (currentInPin->getInstanceOwner()->getMapInstID().size() == 0)
+        {
+            continue;
+        }
+
+        Pin *newInPin = new Pin(newNetPackID, currentInPin->getProp(), currentInPin->getTimingCritical(), nullptr);
+        newInPin->setInstanceOwner(currentInPin->getInstanceOwner()->getPackInstance());
+
+        Net *newNet = new Net(newNetPackID);
+        newNet->setClock(net->isClock());
+        newNet->setInpin(newInPin);
+        for (auto currentOutPin : net->getOutputPins())
+        {
+            Pin *newOutPin = new Pin(newNetPackID, currentOutPin->getProp(), currentOutPin->getTimingCritical(), nullptr);
+            newOutPin->setInstanceOwner(currentOutPin->getInstanceOwner()->getPackInstance());
+            newNet->addPinIfUnique_Jiu(newOutPin);
+            // auto inst = pin->getInstanceOwner();
+            int a = 0;
+        }
+
+        glbPackNetMap.insert(std::make_pair(newNetPackID, newNet));
+        newNetPackID++;
+        int a = 0;
+    }
+}
+
 // 还原最终结果映射
 void recoverAllMap(bool isSeqPack)
 {
@@ -2346,77 +2423,6 @@ void recoverAllMap(bool isSeqPack)
     }
 }
 
-void processNet(int netID, Net *net, int &newNetPackID)
-{
-    {
-        std::lock_guard<std::mutex> lock(oldNetIDMutex); // 用互斥锁保护 oldNetID2newNetID 的访问
-        oldNetID2newNetID.insert(std::make_pair(netID, newNetPackID));
-    }
-
-    auto currentInPin = net->getInpin();
-    if (currentInPin->getInstanceOwner()->getMapInstID().size() == 0)
-    {
-        return;
-    }
-
-    Pin *newInPin = new Pin(newNetPackID, currentInPin->getProp(), currentInPin->getTimingCritical(), nullptr);
-    newInPin->setInstanceOwner(currentInPin->getInstanceOwner()->getPackInstance());
-
-    Net *newNet = new Net(newNetPackID);
-    newNet->setClock(net->isClock());
-    newNet->setInpin(newInPin);
-
-    for (auto currentOutPin : net->getOutputPins())
-    {
-        Pin *newOutPin = new Pin(newNetPackID, currentOutPin->getProp(), currentOutPin->getTimingCritical(), nullptr);
-        newOutPin->setInstanceOwner(currentOutPin->getInstanceOwner()->getPackInstance());
-        newNet->addPinIfUnique(newOutPin);
-    }
-
-    {
-        std::lock_guard<std::mutex> lock(glbPackNetMapMutex); // 使用互斥锁保护对 glbPackNetMap 的访问
-        glbPackNetMap.insert(std::make_pair(newNetPackID, newNet));
-        newNetPackID++;
-    }
-}
-
-void initialGlbPackNetMap_multi_thread()
-{
-    std::cout << " --- 生成新的 glbPackNetMap ---" << std::endl;
-
-    // 获取系统的硬件线程数
-    unsigned int numThreads = std::thread::hardware_concurrency();
-    if (numThreads == 0)
-        numThreads = 8; // 如果无法检测到核心数，使用 8 作为默认值
-
-    // 使用线程池限制线程数量
-    std::vector<std::future<void>> futures;
-    int newNetPackID = 0;
-
-    for (auto iter : glbNetMap)
-    {
-        int netID = iter.first;
-        Net *net = iter.second;
-
-        // 将任务加入线程池
-        if (futures.size() >= numThreads)
-        {
-            for (auto &f : futures)
-            {
-                f.wait(); // 等待当前的任务完成
-            }
-            futures.clear();
-        }
-
-        futures.push_back(std::async(std::launch::async, processNet, netID, net, std::ref(newNetPackID)));
-    }
-
-    // 等待所有任务完成
-    for (auto &f : futures)
-    {
-        f.wait();
-    }
-}
 //提取node文件名
 std::string extractFileName(const std::string& filePath) {
     size_t pos = filePath.find_last_of("/\\"); // 查找最后一个路径分隔符的位置
@@ -2521,3 +2527,4 @@ bool findPackBigNetId(int pinNumLimit){
     if(glbBigNetPinNum > 0) hasBigNet = true;
     return hasBigNet;
 }
+

@@ -152,7 +152,7 @@ int getPackWirelength(bool isBaseline){
 }
 
 
-// cjq modify 获取inst相关net的线长
+// wbx modify 获取inst相关net的线长
 int getPackRelatedWirelength(bool isBaseline, const std::set<int>& instRelatedNetId){  
   int totalCritWirelength = 0;
   int totalWirelength = 0;

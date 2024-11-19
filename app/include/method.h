@@ -39,10 +39,13 @@ void printInstanceInformation();
 // std::tuple<int, int> getNeighborTile(int x, int y);
 int calculateTwoInstanceWireLength(Instance* inst1, Instance* inst2, bool isBaseLine);
 std::tuple<int, int> getNeighborTile(int x, int y, bool isLeft = true);
+std::tuple<int, int> getNeighborTile_Jiu(int x, int y, bool isLeft = true);
+
 void initialGlbPackInstMap(bool isSeqPack);
 void initialGlbPackNetMap();
+void initialGlbPackNetMap_Jiu();
 void recoverAllMap(bool isSeqPack);
-void initialGlbPackNetMap_multi_thread();
+
 
 
 
@@ -56,7 +59,6 @@ bool fileExists(const std::string& filePath);
 NestedMap readJsonFile(const std::string& filename);
 void writeJsonFile(const std::string& filename, const NestedMap& data);
 bool findPackBigNetId(int pinNumLimit);
-
 
 
 

@@ -19,7 +19,7 @@ if [ -n "$1" ]; then
 else
     # 清空Result文件夹
     rm -f Result/*
-    rm data.json
+    # rm data.json
     # 循环从 1 到 11
     for i in {1..11}
     do

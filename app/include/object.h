@@ -485,6 +485,24 @@ public:
         outputPins.push_back(newPin);
         instanceOwnerIDs.insert(newID);  // 将新的 ID 添加到查找集合中
     }
+     void addPinIfUnique_Jiu(Pin *newPin)
+    {
+        // 获取 newPin 的 instanceOwner 的 ID
+        int newID = newPin->getInstanceOwner()->getInstID();
+
+        // 检查是否已经有相同 ID 的 instanceOwner 在列表中
+        for (const auto &pin : outputPins)
+        {
+            if (pin->getInstanceOwner()->getInstID() == newID)
+            {
+                // 已经有相同的 instanceOwner ID，跳过添加
+                return;
+            }
+        }
+
+        // 如果没有找到相同 ID，添加新的 Pin
+        outputPins.push_back(newPin);
+    }
 };
 
 class PLBPlacement
