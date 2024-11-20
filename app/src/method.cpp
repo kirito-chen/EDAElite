@@ -328,7 +328,7 @@ void generateOutputFile(bool isBaseline, const std::string &filename)
         outFile << "X" << x << "Y" << y << "Z" << z << " " << type << " inst_" << instID;
 
         // 如果实例是固定的，输出 FIXED
-        if (inst->isFixed())
+        if (inst->isOriginalFixed())
         {
             outFile << " FIXED";
         }
@@ -547,7 +547,6 @@ void matchLUTPairsThread(std::map<int, Instance *> &glbInstMap, std::vector<int>
                 int twoinstwirelength = calculateTwoInstanceWireLength(currentLUT, otherLUT, false);
                 if (twoinstwirelength >= WIRELIMIT)
                 {
-                    int a = 0;
                     continue;
                 }
 
@@ -574,19 +573,19 @@ void matchLUTPairsThread(std::map<int, Instance *> &glbInstMap, std::vector<int>
                 std::unordered_set<int> unionPins = unionSets(currentLUTNets, otherLUTNets);
                 int totalInpins = unionPins.size();
 
-                // 完全匹配模式
-                if (sharedNetCount > maxSharedNets && totalInpins == inputPinNum && currentLUTNets.size() == otherLUTNets.size())
-                {
-                    maxSharedNets = sharedNetCount;
-                    bestMatchedLUTID = otherLUTID;
-                }
-
-                // // 最大匹配模式
-                // if (sharedNetCount > maxSharedNets && totalInpins <= 6 && sharedNetCount > 1)
+                // // 完全匹配模式
+                // if (sharedNetCount > maxSharedNets && totalInpins == inputPinNum && currentLUTNets.size() == otherLUTNets.size())
                 // {
                 //     maxSharedNets = sharedNetCount;
                 //     bestMatchedLUTID = otherLUTID;
                 // }
+
+                // 最大匹配模式
+                if (sharedNetCount > maxSharedNets && totalInpins <= 6 && sharedNetCount > 0)
+                {
+                    maxSharedNets = sharedNetCount;
+                    bestMatchedLUTID = otherLUTID;
+                }
             }
         }
 

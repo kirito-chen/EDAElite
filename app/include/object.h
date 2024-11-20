@@ -301,6 +301,8 @@ class Instance
     std::vector<Pin *> outpins;
     int instID;
 
+    bool originalFixed;                 // 最初是否为固定，用于生成结果文件
+
     int allRelatedNetHPWL;     // 存取与inst相关的所有net的HPWL之和
     int allRelatedNetHPWLAver; // cjq modify 24.10.20 平均HPWL
 
@@ -338,6 +340,9 @@ public:
 
     bool isFixed() const { return fixed; }
     void setFixed(bool value) { fixed = value; }
+
+    bool isOriginalFixed() const { return originalFixed; }
+    void setOriginalFixed(bool value) { originalFixed = value; }
 
     bool isLUTInitial() const { return lutInitialed; }
     void setLUTInitial(bool _isLUTInitial) { lutInitialed = _isLUTInitial; }

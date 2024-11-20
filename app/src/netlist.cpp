@@ -171,6 +171,7 @@ bool readInputNodes(const std::string& fileName) {
     newInstance->setModelName(type);
     newInstance->setBaseLocation(std::make_tuple(x, y, z));
     newInstance->setFixed(isFixed);
+    newInstance->setOriginalFixed(isFixed);
     newInstance->setCellLib(libPtr);
     newInstance->setInstID(instID);
     glbInstMap[instID] = newInstance;
