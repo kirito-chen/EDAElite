@@ -14,8 +14,10 @@
 
 // #define DEBUG
 // #define EXTERITER  //是否固定外部循环次数
-// #define INFO  //是否输出每次的迭代信息
-#define TIME_LIMIT 1180
+#define INFO  //是否输出每次的迭代信息
+// #define TIME_OUT    //判断是否采用时间截止进程  二者需要一个生效
+#define CONV  //判断当程序收敛时结束进程  二者需要一个生效
+#define TIME_LIMIT 1180  
 
 // 全局随机数生成器
 std::mt19937& get_random_engine() {
@@ -275,32 +277,20 @@ std::pair<int,int> getNetCenter(bool isBaseline, Net *net){ //返回net的中心
     x += xt;
     y += yt;
     //标记为访问过
-    std::string instName = inst->getInstanceName();
-    size_t underscorePos = instName.find('_');
-    if (underscorePos != std::string::npos) {
-      std::string subStr = instName.substr(underscorePos + 1);
-      // Convert the second substring to an integer
-      int instId = std::stoi(subStr);
-      visitInst.insert(instId);
-    }
+    int instId = inst->getInstId();
+    visitInst.insert(instId);
     //统计outputpin
     std::list<Pin*>& pinList = net->getOutputPins();
     for(const auto& pin : pinList){
         Instance* inst = pin->getInstanceOwner();
         //判断是否重复出现
-        std::string instName = inst->getInstanceName();
-        size_t underscorePos = instName.find('_');
-        if (underscorePos != std::string::npos) {
-            std::string subStr = instName.substr(underscorePos + 1);
-            // Convert the second substring to an integer
-            int instId = std::stoi(subStr);
-            auto it = visitInst.find(instId);
-            if (it != visitInst.end()) {
-                //重复的inst，跳过
-                continue;
-            }  
-            else visitInst.insert(instId);
-        }
+        int instId = inst->getInstId();
+        auto it = visitInst.find(instId);
+        if (it != visitInst.end()) {
+            //重复的inst，跳过
+            continue;
+        }  
+        else visitInst.insert(instId);
         if(isBaseline){
             std::tie(xt, yt, zt) = inst->getBaseLocation();
         }
@@ -324,7 +314,7 @@ bool isValid(bool isBaseline, int x, int y, int& z, Instance* inst){ //判断这
     // }
     std::string instType = inst->getModelName();
     std::string instName = inst->getInstanceName();
-    int instId = std::stoi(inst->getInstanceName().substr(5));  // inst_xxx 从第5个字符开始截取，转换为整数
+    int instId = inst->getInstId();
     if(instType.substr(0,3) == "LUT"){
         std::vector<int> hasDRAM(2, 0); //  1 表示有DRAM
         //先判断是否有DRAM
@@ -541,7 +531,7 @@ int changeTile(bool isBaseline, std::tuple<int, int, int> originLoc, std::tuple<
     std::tie(xGoal, yGoal, zGoal) = loc;
     Tile* tileCur = chip.getTile(xCur, yCur);
     Tile* tileGoal = chip.getTile(xGoal, yGoal);
-    int instId = std::stoi(inst->getInstanceName().substr(5));  // inst_xxx 从第5个字符开始截取，转换为整数
+    int instId = inst->getInstId();
     //删除旧的tile插槽中的inst
     slotArr *slotArrCur = tileCur->getInstanceByType(inst->getModelName().substr(0,3)); //LUT or SEQ
     Slot* slot = slotArrCur->at(zCur);
@@ -668,7 +658,7 @@ int arbsa(bool isBaseline, std::string nodesFile){
     const int seed = 999;  // 999 888
     set_random_seed(seed);
     //时间限制
-    const int timeLimit = 1180; //1180  3580
+    const int timeLimit = TIME_LIMIT; //1180  3580
     //设置引脚数超过该数字的net为bigNet
     const int pinNumLimit = 5000; //5000
 
@@ -780,8 +770,6 @@ int arbsa(bool isBaseline, std::string nodesFile){
     //记录bigNet的cost
     int bigNetCostPre = 0;
     int bigNetCostCur = 0;
-    //设置引脚数超过该数字的net为bigNet
-    const int pinNumLimit = 5000; //5000
     //填充有超过次数的bigNet
     if(findBigNetId(pinNumLimit)){
         //记录bigNet的cost
@@ -798,45 +786,18 @@ int arbsa(bool isBaseline, std::string nodesFile){
     std::cout<<"[INFO] The simulated annealing algorithm starts "<< std::endl;
     std::cout<<"[INFO] initial temperature T = "<< T <<", threshhold = "<<threashhold<<", alpha = "<<alpha<<
              ", InnerIter = "<<InnerIter<<", seed ="<<seed << ", iterLimit ="<< iterLimit <<std::endl;
+    
 #ifdef EXTERITER
     int exterIter = 0;
     int exterIterLimit = 10;
 #endif
     bool timeup = false;
-    int epsilon = 1;  // 设置收敛阈值
-    int iterTotal = 0;
     int costPre = cost;
-
-    //读取次数  data.json文件
-    int caseNumber = extractNumber(nodesFile);
-    int iterLimit = -1;
-    std::string filename = "data.json";
-    // 读取 JSON 文件内容
-    NestedMap jsonData;
-
-    if(fileExists(filename)){
-        jsonData = readJsonFile(filename);
-        if(jsonData[std::to_string(caseNumber)].count(std::to_string(timeLimit))){
-            //找到了参数
-            iterLimit = jsonData[std::to_string(caseNumber)][std::to_string(timeLimit)];
-        }
-    }
     
-    //记录bigNet的cost
-    int bigNetCostPre = 0;
-    int bigNetCostCur = 0;
-    //填充有超过次数的bigNet
-    if(findBigNetId(pinNumLimit)){
-        //记录bigNet的cost
-        bigNetCostPre = getRelatedWirelength(isBaseline, glbBigNet, wirelengthType);
-    }
-    
-    //统计命中修改次数 命中修改bigNet次数
-    // int hitNet = 0; //统计net被修改的数量，用于更新range与Fitness
-    // int hitNetLimit = glbNetMap.size() * 0.01; //百分之二十 / 5
-    int hitBigNet = 0; //统计修改影响bigNet的点数，用于更新bigNet的线长
-    int hitBigNetLimit = glbBigNetPinNum * 0.05; //引脚数的百分之二十
-    
+    #ifdef CONV
+    int exterIter = 0;
+    int epsilon = 2;  // 设置收敛阈值
+    #endif
 
     /************ 输出基本信息 ***********/
     std::cout<<"------------------------------------------------\n";
@@ -845,18 +806,15 @@ int arbsa(bool isBaseline, std::string nodesFile){
     std::cout<<"[INFO] initial temperature T= "<< T <<", threshhold= "<<threashhold<<", alpha= "<<
                 alpha<< ", InnerIter= "<<InnerIter<<", seed= "<<seed<<", iterLimit= "<<iterLimit<<std::endl;
     
-    int exterIter = 0;
-    int exterIterLimit = 10;
-
     /************ 循环主体 ***********/
     // 外层循环 温度大于阈值， 更新一次fitness优先级列表
     while(T > threashhold){
         //记录接受的new_cost
         std::vector<int> sigmaVec;       
-        /*
+        #ifdef CONV
         //截断循环 判断是否收敛
-        if(iterTotal >= 10){
-            iterTotal = 0;
+        if(exterIter >  2){
+            exterIter = 0;
             int detaCost = std::abs(costPre - cost);
             // std::cout<<cost <<'-'<<costPre<<'='<<detaCost<<std::endl;
             if(detaCost < epsilon){
@@ -865,11 +823,9 @@ int arbsa(bool isBaseline, std::string nodesFile){
             else{
                 costPre = cost;
             }
-        }*/
-        if(exterIter >= exterIterLimit){
-            break;
         }
-        exterIter++;
+        exterIter ++;
+        #endif
         // 内层循环 小于内层迭代次数
 #ifdef EXTERITER
         if(exterIter >= exterIterLimit){
@@ -878,7 +834,7 @@ int arbsa(bool isBaseline, std::string nodesFile){
         exterIter ++;
 #endif
         // updatePinDensityMapAndTopValues(); //更新全局密度
-        while(Iter < InnerIter){
+        while(iter < InnerIter){
             /*********** 更新 bigNet cost **************/
             if(glbBigNetPinNum > 0 && hitBigNet >= hitBigNetLimit){
                 //更新bigNet
@@ -887,11 +843,12 @@ int arbsa(bool isBaseline, std::string nodesFile){
                 bigNetCostPre = bigNetCostCur;
                 hitBigNet = 0;
                 //顺带更新range与fitness
-                // calculRelatedRangeMap(isBaseline, rangeActualMap, glbBigNet);
-                // calculRelatedFitness(fitnessVec, rangeDesiredMap, rangeActualMap, glbBigNet);
+                calculRelatedRangeMap(isBaseline, rangeActualMap, glbBigNet);
+                calculRelatedFitness(fitnessVec, rangeDesiredMap, rangeActualMap, glbBigNet);
             }
 
-            if(Iter % 100 == 0) {
+            if(iter % 100 == 0) {
+                #ifdef TIME_OUT
                 if(iterLimit > 0){
                     if(iterTotal >= iterLimit){
                         timeup = true;
@@ -912,8 +869,9 @@ int arbsa(bool isBaseline, std::string nodesFile){
                         break;
                     }
                 }
+                #endif
                 #ifdef INFO
-                std::cout<<"[INFO] T:"<< std::scientific << std::setprecision(3) <<T <<" iter:"<<std::setw(4)<<Iter<<" alpha:"<<std::fixed<<std::setprecision(2)<<alpha<<" cost:"<<std::setw(7)<<cost<<std::endl;
+                std::cout<<"[INFO] T:"<< std::scientific << std::setprecision(3) <<T <<" iter:"<<std::setw(4)<<iter<<" alpha:"<<std::fixed<<std::setprecision(2)<<alpha<<" cost:"<<std::setw(7)<<cost<<std::endl;
                 #endif
             }
             // std::cout<<"[INFO] T:"<< std::scientific << std::setprecision(3) <<T <<" iter:"<<std::setw(4)<<iter<<" alpha:"<<std::fixed<<std::setprecision(2)<<alpha<<" cost:"<<std::setw(7)<<cost<<std::endl;
@@ -947,7 +905,7 @@ int arbsa(bool isBaseline, std::string nodesFile){
             //空间换时间
             //找到这个inst附近的net
             std::set<int> instRelatedNetId;
-            int instId = std::stoi(inst->getInstanceName().substr(5));  // inst_xxx 从第5个字符开始截取，转换为整数
+            int instId = inst->getInstId();
             bool instHasBigNet = false; //判断这个inst是否连接到bigNet
             if(instRelatedNetIdMap.count(instId)){
                 //找得到
@@ -1011,8 +969,8 @@ int arbsa(bool isBaseline, std::string nodesFile){
             // if deta < 0 更新这个操作到布局中，更新fitness列表
             if((deta < 0 || randomValue < eDetaT) && tryUpdatePinDensity(originLoc, loc)){
                 // 间隔次数多了再更新这两
-                // calculRelatedRangeMap(isBaseline, rangeActualMap, instRelatedNetId);
-                // calculRelatedFitness(fitnessVec, rangeDesiredMap, rangeActualMap, instRelatedNetId);
+                calculRelatedRangeMap(isBaseline, rangeActualMap, instRelatedNetId);
+                calculRelatedFitness(fitnessVec, rangeDesiredMap, rangeActualMap, instRelatedNetId);
                 cost = costNew;
                 sigmaVec.emplace_back(costNew);
                 // sortedFitness(fitnessVec);

@@ -15,7 +15,6 @@
 #include "method.h"
 #include "test.h"
 #include "arbsa.h"
-#include "binary.h"
 
 
 

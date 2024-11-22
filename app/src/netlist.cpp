@@ -171,6 +171,7 @@ bool readInputNodes(const std::string& fileName) {
     newInstance->setBaseLocation(std::make_tuple(x, y, z));
     newInstance->setFixed(isFixed);
     newInstance->setCellLib(libPtr);
+    newInstance->setInstId(instID);  // cjq modify
     glbInstMap[instID] = newInstance;
 
     // add the instance to the corresponding tile

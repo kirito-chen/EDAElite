@@ -334,19 +334,6 @@ void statistics(){
     
 }
 
-//提取node文件的数字
-int extractNumber(const std::string& filePath) {
-    std::regex pattern(R"(case_(\d+)\.nodes)");  // 正则表达式：匹配"case_"后面的数字，直到".nodes"
-    std::smatch match;
-
-    if (std::regex_search(filePath, match, pattern)) {
-        return std::stoi(match[1]);  // 提取并转换为整数
-    } else {
-        throw std::runtime_error("无法从文件名中提取数字");
-    }
-}
-
-
 //如果存在 引脚数 > pinNum的netId 的net则返回true，id存储在 glbBigNet 中
 bool findBigNetId(int pinNumLimit){
     bool hasBigNet = false;

@@ -267,6 +267,8 @@ class Instance {
 
     std::vector<int> movableRegion; //wbx，inst的可移动区域，由inst的net最小外包矩形给出
 
+    int instId; //instance的id
+
 public:
     Instance(); 
     ~Instance();
@@ -318,6 +320,9 @@ public:
     std::vector<int> getMovableRegion(){return movableRegion;}
 
     //void connectOutpin(int netID, int idx) { outpins[idx].setNetID(netID); }
+
+    void setInstId(int _instId) {instId = _instId;}
+    int getInstId() {return instId;}
 
 };
 
