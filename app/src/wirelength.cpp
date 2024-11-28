@@ -73,7 +73,7 @@ int getRelatedWirelength(bool isBaseline, const std::set<int>& instRelatedNetId)
         continue;
       }
       totalCritWirelength += net->getCritWireLength(isBaseline);
-      totalWirelength += net->getNonCritWireLength(isBaseline);
+      totalWirelength += net->getNonCritWireLength(isBaseline);    // 屏蔽掉非关键路径
     }
     else{
       std::cout<<"getRelatedWirelength can not find this netId:"<<i<<std::endl;

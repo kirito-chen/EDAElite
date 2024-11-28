@@ -934,7 +934,7 @@ std::set<int> Tile::getConnectedLutSeqInput(bool isBaseline)
           // }
           int netID = pin->getNetID();
           // if (netID < 0 || (glbBigNetPinNum > 0 && glbBigNet.find(netID) != glbBigNet.end())) //cjq modify 忽略bigNet
-          if (netID < 0) 
+          if (netID < 0)
           { // unconnected pin
             continue;
           }
@@ -1015,7 +1015,7 @@ std::set<int> Tile::getConnectedLutSeqOutput(bool isBaseline)
           Pin *pin = instPtr->getOutpin(i);
           int netID = pin->getNetID();
           // if (netID < 0 || (glbBigNetPinNum > 0 && glbBigNet.find(netID) != glbBigNet.end())) //cjq modify 忽略bigNet
-          if (netID < 0 )
+          if (netID < 0)
           { // unconnected pin
             continue;
           }
@@ -1403,6 +1403,107 @@ int Tile::getLUTCount() const
   return availableLUTs > 0 ? availableLUTs : 0; // 确保可用的 LUT 数量不会低于 0
 }
 
+// 判断在whichPart半区有没有LUT，为了方便HPLB的放置
+bool Tile::isLUTempty(int whichPart, bool isBaseline)
+{
+  bool isEmpty = true;
+  // 遍历Tile中的实例映射，找出LUT和DFF的使用情况
+  int count = 0;
+  for (const auto &entry : instanceMap)
+  {
+    const std::string &type = entry.first; // 获取当前 Slot 的类型
+    if (type.substr(0, 3) == "LUT")        // 检查是否为 LUT 类型
+    {
+      const slotArr &slots = entry.second; // 获取对应的 Slot 数组
+      for (size_t i = whichPart * 4; i < 4 + whichPart * 4; i++)
+      {
+        if (slots[i]->getOptimizedInstances().size() > 0) // 如果该 slot 有实例
+        {
+          isEmpty = false;
+        }
+      }
+    }
+    if (type.substr(0, 3) == "DRA")
+    {
+      const slotArr &slots = entry.second; // 获取对应的 Slot 数组
+      for (size_t i = whichPart; i < 1 + whichPart; i++)
+      {
+        if (slots[i]->getOptimizedInstances().size() > 0) // 如果该 slot 有实例
+        {
+          isEmpty = false;
+        }
+      }
+    }
+  }
+  return isEmpty;
+}
+
+int Tile::findWhichPartForHPLB()
+{
+  // 遍历Tile中的实例映射，找出 LUT 的使用情况
+  bool first_part = true;
+  bool second_part = true;
+  for (const auto &entry : instanceMap)
+  {
+    const std::string &type = entry.first; // 获取当前 Slot 的类型
+    if (type.substr(0, 3) == "LUT")        // 检查是否为 LUT 类型
+    {
+      const slotArr &slots = entry.second; // 获取对应的 Slot 数组
+      for (size_t i = 0; i < 4; i++)
+      {
+        if (slots[i]->getOptimizedInstances().size() > 0) // 如果该 slot 有实例
+        {
+          first_part = false;
+          break;
+        }
+      }
+      for (size_t i = 4; i < 8; i++)
+      {
+        if (slots[i]->getOptimizedInstances().size() > 0) // 如果该 slot 有实例
+        {
+          second_part = false;
+          break;
+        }
+      }
+    }
+    if (type.substr(0, 3) == "DRA")
+    {
+      const slotArr &slots = entry.second; // 获取对应的 Slot 数组
+      for (size_t i = 0; i < 1; i++)
+      {
+        if (slots[i]->getOptimizedInstances().size() > 0) // 如果该 slot 有实例
+        {
+          first_part = false;
+        }
+      }
+      for (size_t i = 1; i < 2; i++)
+      {
+        if (slots[i]->getOptimizedInstances().size() > 0) // 如果该 slot 有实例
+        {
+          second_part = false;
+        }
+      }
+    }
+  }
+  // 根据条件返回结果
+  if (first_part && second_part)
+  {
+    return 1;
+  }
+  else if (first_part)
+  {
+    return 0;
+  }
+  else if (second_part)
+  {
+    return 1;
+  }
+  else
+  {
+    return -1;
+  }
+}
+
 // 获取当前inst已使用的pin
 std::set<int> Tile::getUsedPins(Instance *inst)
 {
@@ -1468,6 +1569,7 @@ Instance::Instance()
   lutSetID = -1;
   seqGroupID = -1;
   instID = -1;
+  hplbID = -1;
 }
 
 bool Instance::isPlaced()
@@ -2236,5 +2338,4 @@ Instance *Instance::getPackInstance()
       return *bank.getSEQInstances().begin();
     }
   }
-
 }

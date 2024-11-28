@@ -9,6 +9,7 @@
 #include <limits>
 #include <algorithm>
 #include <unordered_set>
+#include <iostream>
 
 // PLB slots
 #define MAX_LUT_CAPACITY 8
@@ -42,7 +43,7 @@ enum PinProp
     PIN_PROP_RESET,
     PIN_PROP_CLOCK
 };
-
+class HPLB;
 class Instance;
 class Net;
 class SEQBankPlacement;
@@ -164,6 +165,8 @@ public:
     bool addSeqBank(SEQBankPlacement seqBank);
 
     std::vector<int> getSeqInstanceBankNum();
+    bool isLUTempty(int whichPart, bool isBaseline); // 判断whichPart是否为空，保证能存放一个HPLB
+    int findWhichPartForHPLB();
 };
 
 class ClockRegion
@@ -301,7 +304,7 @@ class Instance
     std::vector<Pin *> outpins;
     int instID;
 
-    bool originalFixed;                 // 最初是否为固定，用于生成结果文件
+    bool originalFixed; // 最初是否为固定，用于生成结果文件
 
     int allRelatedNetHPWL;     // 存取与inst相关的所有net的HPWL之和
     int allRelatedNetHPWLAver; // cjq modify 24.10.20 平均HPWL
@@ -318,6 +321,8 @@ class Instance
 
     std::vector<int> instMapIDVec; // 这里存储的是粗化之后用于映射的instID，LUT和SEQ共用
 
+    int hplbID; // HPLB编号
+
 public:
     Instance();
     ~Instance();
@@ -330,6 +335,10 @@ public:
     // 添加 Getter 和 Setter 函数
     int getMatchedLUTID() const { return matchedLUTID; }
     void setMatchedLUTID(int lutID) { matchedLUTID = lutID; }
+
+    // 添加 Getter 和 Setter 函数 hplb
+    int getHplbID() const { return hplbID; }
+    void setHplbID(int _id) { hplbID = _id; }
 
     // Getter and setter
     std::tuple<int, int, int> getBaseLocation() const { return baseLocation; }
@@ -429,7 +438,7 @@ public:
     {
         netArea.assign(4, -1); //(xlb,ylb,xrt,yrt)
         originID = -1;
-    } // 默认构造函数
+    }         // 默认构造函数
     ~Net() {} // 析构函数
 
     int getOriginID() { return originID; }
@@ -488,9 +497,9 @@ public:
 
         // 添加新的 Pin
         outputPins.push_back(newPin);
-        instanceOwnerIDs.insert(newID);  // 将新的 ID 添加到查找集合中
+        instanceOwnerIDs.insert(newID); // 将新的 ID 添加到查找集合中
     }
-     void addPinIfUnique_Jiu(Pin *newPin)
+    void addPinIfUnique_Jiu(Pin *newPin)
     {
         // 获取 newPin 的 instanceOwner 的 ID
         int newID = newPin->getInstanceOwner()->getInstID();
@@ -645,4 +654,138 @@ public:
 
     // 获取 SEQ 实例列表
     const std::vector<Instance *> &getSEQInstances() const { return seqInstances; }
+};
+
+class HPLB
+{
+private:
+    int id;                             // PLB的唯一ID
+    bool isFixed;                       // 是否为固定位置
+    std::tuple<int, int, int> location; // 位置 (x, y, z)
+    std::set<Instance *> instances;     // 存储LUT、SEQ等实例
+
+    std::set<int> clkNets; // 时钟引脚
+    std::set<int> ceNets;  // CE引脚
+    std::set<int> srNets;  // RESET引脚
+
+public:
+    // 默认构造函数
+    HPLB() : id(-1)
+    {
+    }
+    // 构造函数
+    HPLB(int id, bool fixed, std::tuple<int, int, int> _location)
+        : id(id), isFixed(fixed), location(_location) {}
+
+    // 获取PLB的ID
+    int getID() const
+    {
+        return id;
+    }
+
+    // 设置PLB的ID
+    void setID(int newID)
+    {
+        id = newID;
+    }
+
+    // 是否为固定PLB
+    bool getIsFixed() const
+    {
+        return isFixed;
+    }
+
+    // 设置是否固定
+    void setIsFixed(bool fixed)
+    {
+        isFixed = fixed;
+    }
+
+    // 获取位置
+    std::tuple<int, int, int> getLocation() const
+    {
+        return location;
+    }
+
+    // 设置位置
+    void setLocation(int x, int y, int z)
+    {
+        location = std::make_tuple(x, y, z);
+    }
+
+    // 添加实例
+    void addInstance(Instance *instance)
+    {
+        instances.insert(instance);
+    }
+
+    // 移除实例
+    void removeInstance(Instance *instance)
+    {
+        instances.erase(instance);
+    }
+
+    // 获取所有实例
+    const std::set<Instance *> &getInstances() const
+    {
+        return instances;
+    }
+
+    // 获取实例数量
+    size_t getInstanceCount() const
+    {
+        return instances.size();
+    }
+
+    // 打印PLB信息
+    void printInfo() const
+    {
+        std::cout << "HPLB ID: " << id
+                  << ", Fixed: " << (isFixed ? "Yes" : "No")
+                  << ", Location: (" << std::get<0>(location)
+                  << ", " << std::get<1>(location)
+                  << ", " << std::get<2>(location) << ")\n"
+                  << "Instance Count: " << instances.size() << std::endl;
+    }
+
+    // 添加SEQ实例到当前Bank
+    bool addSeqInstance(Instance *inst)
+    {
+        int newClk = clkNets.size();
+        int newCE = ceNets.size();
+        int newSR = srNets.size();
+
+        for (Pin *pin : inst->getInpins())
+        {
+            int netID = pin->getNetID();
+            PinProp prop = pin->getProp();
+
+            if (prop == PIN_PROP_CLOCK && clkNets.find(netID) == clkNets.end())
+                newClk++;
+            if (prop == PIN_PROP_CE && ceNets.find(netID) == ceNets.end())
+                newCE++;
+            if (prop == PIN_PROP_RESET && srNets.find(netID) == srNets.end())
+                newSR++;
+        }
+
+        // 检查是否超过Bank约束
+        if (newClk <= MAX_TILE_CLOCK_PER_PLB_BANK && newCE <= MAX_TILE_CE_PER_PLB_BANK && newSR <= MAX_TILE_RESET_PER_PLB_BANK)
+        {
+            instances.insert(inst);
+            for (Pin *pin : inst->getInpins())
+            {
+                int netID = pin->getNetID();
+                PinProp prop = pin->getProp();
+
+                if (prop == PIN_PROP_CLOCK)
+                    clkNets.insert(netID);
+                if (prop == PIN_PROP_CE)
+                    ceNets.insert(netID);
+                if (prop == PIN_PROP_RESET)
+                    srNets.insert(netID);
+            }
+            return true;
+        }
+        return false;
+    }
 };

@@ -115,9 +115,11 @@ int main(int argc, char *argv[])
 
         matchLUTPairs(glbInstMap, true, isSeqPack); // 打包代码
         printInstanceInformation();
+        legalCheck();
+        reportWirelength();
         // 模拟退火
         newArbsa(isBaseline, nodesFile, isSeqPack);
-
+        
         // 旧的模拟退火
         // newArbsa_Jiu(isBaseline, isSeqPack);
         

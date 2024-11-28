@@ -14,7 +14,7 @@
 // #define DEBUG
 // #define EXTERITER  //是否固定外部循环次数
 #define INFO           // 是否输出每次的迭代信息
-#define TIME_LIMIT 100 // 时间限制
+#define TIME_LIMIT 30 // 时间限制
 
 // 全局随机数生成器
 std::mt19937 &get_random_engine()

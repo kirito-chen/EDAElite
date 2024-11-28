@@ -15,41 +15,37 @@
 #include <mutex>
 #include <thread>
 
-
 // global variables
-extern std::map<std::string, Lib*> glbLibMap;
-extern std::map<int, Instance*> glbInstMap;
-extern std::map<int, Net*> glbNetMap;
+extern std::map<std::string, Lib *> glbLibMap;
+extern std::map<int, Instance *> glbInstMap;
+extern std::map<int, Net *> glbNetMap;
 extern Arch chip;
 extern RecSteinerMinTree rsmt;
 extern std::string lineBreaker;
-extern int** isPLB;
+extern int **isPLB;
 
 // 全局变量：用于存储LUT组合
-extern std::map<int, std::set<Instance*>> lutGroups; // 新的组合实例映射
-extern std::map<int, std::set<std::set<Instance*>>> plbGroups;
+extern std::map<int, std::set<Instance *>> lutGroups; // 新的组合实例映射
+extern std::map<int, std::set<std::set<Instance *>>> plbGroups;
 // 全局 PLBPlacement 映射
 extern std::unordered_map<int, PLBPlacement> plbPlacementMap;
 // 全局SEQ映射
 extern std::unordered_map<int, SEQBankPlacement> seqPlacementMap;
 
 // 粗化新数据
-extern std::map<int, Instance*> glbPackInstMap;    // 存储打包后的全局InstMap
-extern std::map<int, Net*> glbPackNetMap;   // 存储打包后的全局NetMap
+extern std::map<int, Instance *> glbPackInstMap; // 存储打包后的全局InstMap
+extern std::map<int, Net *> glbPackNetMap;       // 存储打包后的全局NetMap
 
-
-//全局映射，存放旧netID到新netID的映射
+// 全局映射，存放旧netID到新netID的映射
 extern std::map<int, int> oldNetID2newNetID;
 
-
-
-
-extern std::set<int> glbBigNet; //存储引脚数过大的netid 
-extern int glbBigNetPinNum; //bigNet的引脚和 默认为0
+extern std::set<int> glbBigNet; // 存储引脚数过大的netid
+extern int glbBigNetPinNum;     // bigNet的引脚和 默认为0
 
 /****密度相关****/
-extern std::vector<std::pair<int,int> > glbPinDensity; //第一个是tile x*1000+y 第二个是密度的分子
-extern int glbTopKNum;  //统计PLB的5%数量   setPinDensityMapAndTopValues
-extern int glbInitTopSum; //记录初始top的分子之和
+extern std::vector<std::pair<int, int>> glbPinDensity; // 第一个是tile x*1000+y 第二个是密度的分子
+extern int glbTopKNum;                                 // 统计PLB的5%数量   setPinDensityMapAndTopValues
+extern int glbInitTopSum;                              // 记录初始top的分子之和
 
-
+extern std::map<int, HPLB *> globalHPLBMap; // 全局变量存储所有 HPLB 实例
+extern std::vector<std::tuple<int, int>> neighbor_PLB_xy;
