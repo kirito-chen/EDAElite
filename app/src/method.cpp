@@ -688,21 +688,12 @@ void matchLUTPairs(std::map<int, Instance *> &glbInstMap, bool isLutPack, bool i
         matchLUTGroupsToPLB(lutGroups, plbGroups); // PLB打包，将LUT组打包成PLB组
         updatePLBLocations(plbGroups);             // 更新分配PLB组内部LUT的位置和编号
     }
-    // buildHPLB(); // 建立HPLB
-    packLUTtoHPLB(); // 建立只有LUT的HPLB
-    // legalCheck();
-    // reportWirelength();
-    // printInstanceInformation();
-    // if (isSeqPack)
-    // {
-    //     initializeSEQPlacementMap(glbInstMap);
-    //     updateSEQLocations(seqPlacementMap);
-    // }
-    // updateInstancesToTiles(isSeqPack); // 根据打包情况生成新的初始布局
-    // reportWirelength();
-
-    // initialGlbPackInstMap(isSeqPack); // 初始化 glbPackInstMap
-
+    packLUTtoHPLB(); // 建立只有LUT的HPLB, 并且完成初始布局
+    packSEQtoHPLB(); // 将seq按照共享net和距离限制添加进HPLB
+    
+    generateCompleteGlobalHPLBMap();
+    initialGlbPackInstMap_HPLB(isSeqPack); // 初始化 globalHPLBMap
+    initialGlbPackNetMap_HPLB();           // 初始化
     // 获取起始时间点
     auto start = std::chrono::high_resolution_clock::now();
 
@@ -2143,6 +2134,11 @@ void printInstanceInformation()
         int yuanshi_HPLB_count = 0;
         int yuanshi_PLB_fixed_count = 0;
         int yuanshi_HPLB_fixed_count = 0;
+
+        int yuanshi_lut_pair_count_op = 0;
+        int yuanshi_HPLB_count_op = 0;
+        int yuanshi_PLB_fixed_count_op = 0;
+        int yuanshi_HPLB_fixed_count_op = 0;
         for (int i = 0; i < chip.getNumCol(); i++)
         {
             for (int j = 0; j < chip.getNumRow(); j++)
@@ -2158,8 +2154,13 @@ void printInstanceInformation()
                 bool hplb_fix_low = false;
                 bool is_PLB_fixed = false;
 
+                bool hplb_high_op = false;
+                bool hplb_low_op = false;
+                bool hplb_fix_high_op = false;
+                bool hplb_fix_low_op = false;
+                bool is_PLB_fixed_op = false;
+
                 slotArr lutSlotArr = *(tile->getInstanceByType("LUT"));
-                int lutBegin = 0, lutEnd = 0;
                 for (int idx = 0; idx < (int)lutSlotArr.size(); idx++)
                 {
                     Slot *slot = lutSlotArr[idx];
@@ -2185,7 +2186,7 @@ void printInstanceInformation()
                     {
                         for (auto idx_list : instances)
                         {
-                            if (glbInstMap[idx_list]->isFixed())
+                            if (glbInstMap[idx_list]->isOriginalFixed())
                             {
                                 hplb_fix_low = true;
                             }
@@ -2195,7 +2196,7 @@ void printInstanceInformation()
                     {
                         for (auto idx_list : instances)
                         {
-                            if (glbInstMap[idx_list]->isFixed())
+                            if (glbInstMap[idx_list]->isOriginalFixed())
                             {
                                 hplb_fix_high = true;
                             }
@@ -2203,7 +2204,7 @@ void printInstanceInformation()
                     }
                     for (auto idx_list : instances)
                     {
-                        if (glbInstMap[idx_list]->isFixed())
+                        if (glbInstMap[idx_list]->isOriginalFixed())
                         {
                             is_PLB_fixed = true;
                         }
@@ -2228,6 +2229,77 @@ void printInstanceInformation()
                 if (is_PLB_fixed)
                 {
                     yuanshi_PLB_fixed_count++;
+                }
+
+                slotArr lutSlotArr_opti = *(tile->getInstanceByType("LUT"));
+                for (int idx = 0; idx < (int)lutSlotArr_opti.size(); idx++)
+                {
+                    Slot *slot = lutSlotArr_opti[idx];
+                    if (slot == nullptr)
+                    {
+                        continue;
+                    }
+                    std::list<int> instances;
+                    instances = slot->getOptimizedInstances();
+                    if (instances.size() == 2)
+                    {
+                        yuanshi_lut_pair_count_op++;
+                    }
+                    if (instances.size() > 0 && idx <= 3)
+                    {
+                        hplb_low_op = true;
+                    }
+                    if (instances.size() > 0 && idx > 3)
+                    {
+                        hplb_high_op = true;
+                    }
+                    if (instances.size() > 0 && idx <= 3)
+                    {
+                        for (auto idx_list : instances)
+                        {
+                            if (glbInstMap[idx_list]->isFixed())
+                            {
+                                hplb_fix_low_op = true;
+                            }
+                        }
+                    }
+                    if (instances.size() > 0 && idx > 3)
+                    {
+                        for (auto idx_list : instances)
+                        {
+                            if (glbInstMap[idx_list]->isFixed())
+                            {
+                                hplb_fix_high_op = true;
+                            }
+                        }
+                    }
+                    for (auto idx_list : instances)
+                    {
+                        if (glbInstMap[idx_list]->isFixed())
+                        {
+                            is_PLB_fixed_op = true;
+                        }
+                    }
+                }
+                if (hplb_high_op)
+                {
+                    yuanshi_HPLB_count_op++;
+                }
+                if (hplb_low_op)
+                {
+                    yuanshi_HPLB_count_op++;
+                }
+                if (hplb_fix_high_op)
+                {
+                    yuanshi_HPLB_fixed_count_op++;
+                }
+                if (hplb_fix_low_op)
+                {
+                    yuanshi_HPLB_fixed_count_op++;
+                }
+                if (is_PLB_fixed_op)
+                {
+                    yuanshi_PLB_fixed_count_op++;
                 }
             }
         }
@@ -2265,10 +2337,17 @@ void printInstanceInformation()
         std::cout << "HPLB中LUT instance 的数目 :   " << total_LUT_HPLBinstNum << std::endl;
         std::cout << "HPLB中SEQ instance 的数目 :   " << total_SEQ_HPLBinstNum << std::endl;
         std::cout << "plbGroups 的数目          :   " << plbGroups.size() << std::endl;
-        std::cout << "初始布局的 LUT_pair 情况   :   " << yuanshi_lut_pair_count << std::endl;
-        std::cout << "初始布局的 HPLB 情况   :   " << yuanshi_HPLB_count << std::endl;
+        std::cout << lineBreaker << std::endl;
+        std::cout << "初始布局的 LUT_pair 情况    :   " << yuanshi_lut_pair_count << std::endl;
+        std::cout << "初始布局的 HPLB 情况        :   " << yuanshi_HPLB_count << std::endl;
         std::cout << "初始布局的 固定的 PLB 情况   :   " << yuanshi_PLB_fixed_count << std::endl;
-        std::cout << "初始布局的 固定的 HPLB 情况   :   " << yuanshi_HPLB_fixed_count << std::endl;
+        std::cout << "初始布局的 固定的 HPLB 情况  :   " << yuanshi_HPLB_fixed_count << std::endl;
+        std::cout << lineBreaker << std::endl;
+
+        std::cout << "打包后的 LUT_pair 情况     :   " << yuanshi_lut_pair_count_op << std::endl;
+        std::cout << "打包后的 HPLB 情况         :   " << yuanshi_HPLB_count_op << std::endl;
+        std::cout << "打包后的 固定的 PLB 情况    :   " << yuanshi_PLB_fixed_count_op << std::endl;
+        std::cout << "打包后的 固定的 HPLB 情况   :   " << yuanshi_HPLB_fixed_count_op << std::endl;
 
         std::cout << lineBreaker << std::endl;
     }
@@ -2578,44 +2657,6 @@ void initialGlbPackNetMap()
         newNetPackID++;
     }
 }
-
-void initialGlbPackNetMap_Jiu()
-{
-    std::cout << " --- 生成新的glbPackNetMap ---" << std::endl;
-    int newNetPackID = 0;
-    for (auto iter : glbNetMap)
-    {
-        auto netID = iter.first;
-        auto net = iter.second;
-        oldNetID2newNetID.insert(std::make_pair(netID, newNetPackID)); // 建立旧netID到新netID的映射
-        // 处理InPin
-        auto currentInPin = net->getInpin();
-        if (currentInPin->getInstanceOwner()->getMapInstID().size() == 0)
-        {
-            continue;
-        }
-
-        Pin *newInPin = new Pin(newNetPackID, currentInPin->getProp(), currentInPin->getTimingCritical(), nullptr);
-        newInPin->setInstanceOwner(currentInPin->getInstanceOwner()->getPackInstance());
-
-        Net *newNet = new Net(newNetPackID);
-        newNet->setClock(net->isClock());
-        newNet->setInpin(newInPin);
-        for (auto currentOutPin : net->getOutputPins())
-        {
-            Pin *newOutPin = new Pin(newNetPackID, currentOutPin->getProp(), currentOutPin->getTimingCritical(), nullptr);
-            newOutPin->setInstanceOwner(currentOutPin->getInstanceOwner()->getPackInstance());
-            newNet->addPinIfUnique_Jiu(newOutPin);
-            // auto inst = pin->getInstanceOwner();
-            int a = 0;
-        }
-
-        glbPackNetMap.insert(std::make_pair(newNetPackID, newNet));
-        newNetPackID++;
-        int a = 0;
-    }
-}
-
 // 还原最终结果映射
 void recoverAllMap(bool isSeqPack)
 {
@@ -2665,6 +2706,43 @@ void recoverAllMap(bool isSeqPack)
                 glbInstMap[instVec[i]]->setLocation(location);
             }
         }
+    }
+}
+
+void initialGlbPackNetMap_Jiu()
+{
+    std::cout << " --- 生成新的glbPackNetMap ---" << std::endl;
+    int newNetPackID = 0;
+    for (auto iter : glbNetMap)
+    {
+        auto netID = iter.first;
+        auto net = iter.second;
+        oldNetID2newNetID.insert(std::make_pair(netID, newNetPackID)); // 建立旧netID到新netID的映射
+        // 处理InPin
+        auto currentInPin = net->getInpin();
+        if (currentInPin->getInstanceOwner()->getMapInstID().size() == 0)
+        {
+            continue;
+        }
+
+        Pin *newInPin = new Pin(newNetPackID, currentInPin->getProp(), currentInPin->getTimingCritical(), nullptr);
+        newInPin->setInstanceOwner(currentInPin->getInstanceOwner()->getPackInstance());
+
+        Net *newNet = new Net(newNetPackID);
+        newNet->setClock(net->isClock());
+        newNet->setInpin(newInPin);
+        for (auto currentOutPin : net->getOutputPins())
+        {
+            Pin *newOutPin = new Pin(newNetPackID, currentOutPin->getProp(), currentOutPin->getTimingCritical(), nullptr);
+            newOutPin->setInstanceOwner(currentOutPin->getInstanceOwner()->getPackInstance());
+            newNet->addPinIfUnique_Jiu(newOutPin);
+            // auto inst = pin->getInstanceOwner();
+            int a = 0;
+        }
+
+        glbPackNetMap.insert(std::make_pair(newNetPackID, newNet));
+        newNetPackID++;
+        int a = 0;
     }
 }
 
@@ -3399,9 +3477,11 @@ void packLUTtoHPLB()
         int hplb_X = std::get<0>(location);
         int hplb_Y = std::get<1>(location);
         int hplb_Z = std::get<2>(location);
+        // int glb_hplb_low_id = -1000 * hplb_X - hplb_Y;
+        // int glb_hplb_high_id = 1000 * hplb_X + hplb_Y;
         // 创建两个 HPLB：一个用于 z <= 3，另一个用于 z > 3
-        HPLB *hplbLow = new HPLB(plbID, isFixed, std::make_tuple(-1, -1, 0));  // hplb_Z = 0
-        HPLB *hplbHigh = new HPLB(plbID, isFixed, std::make_tuple(-1, -1, 1)); // hplb_Z = 1
+        HPLB *hplbLow = new HPLB(plbID * 2, isFixed, std::make_tuple(-1, -1, 0));      // hplb_Z = 0
+        HPLB *hplbHigh = new HPLB(plbID * 2 + 1, isFixed, std::make_tuple(-1, -1, 1)); // hplb_Z = 1
         for (const auto &lutGroup : lutGroups)
         {
             for (Instance *instance : lutGroup)
@@ -3451,6 +3531,7 @@ void packLUTtoHPLB()
     }
 
     // 第一遍：遍历 plbGroups，放置固定实例
+    int count_temp = 0;
     for (const auto &plbGroupPair : plbGroups)
     {
         int plbGroupID = plbGroupPair.first;
@@ -3490,6 +3571,7 @@ void packLUTtoHPLB()
                         if (tilePtr->addInstance(instID, std::get<2>(sitelocation), instance->getModelName(), false))
                         {
                             instance->setLUTInitial(true);
+                            count_temp++;
                         }
                         else
                         {
@@ -3597,6 +3679,429 @@ void packLUTtoHPLB()
             }
         }
     }
-    // legalCheck();
+}
+
+void packSEQtoHPLB()
+{
+
+    // 清除所有 tile 中的 SEQ 实例
+    for (int i = 0; i < chip.getNumCol(); i++)
+    {
+        for (int j = 0; j < chip.getNumRow(); j++)
+        {
+            Tile *tile = chip.getTile(i, j);
+            tile->clearSEQOptimizedInstances(); // 清理 SEQ 类型的实例
+        }
+    }
+    // 进行SEQ的匹配
+    std::unordered_map<int, std::unordered_set<int>> netToSEQMap; // Net -> SEQ 实例映射
+
+    // 遍历所有 instance， 收集SEQ 信息
+    for (auto inst_pair : glbInstMap)
+    {
+        Instance *instance = inst_pair.second;
+        if (instance->getModelName().substr(0, 3) == "SEQ") // 假设 Instance 类有 isSEQ 方法
+        {
+            // 遍历 SEQ 的连接网络，建立映射
+            for (int i = 0; i < instance->getNumInpins(); ++i)
+            {
+                Pin *pin = instance->getInpin(i);
+                int netID = pin->getNetID();
+                if (netID != -1) // 跳过未连接的网络
+                {
+                    netToSEQMap[netID].insert(instance->getInstID());
+                }
+            }
+            for (int i = 0; i < instance->getNumOutpins(); ++i)
+            {
+                Pin *pin = instance->getOutpin(i);
+                int netID = pin->getNetID();
+                if (netID != -1) // 跳过未连接的网络
+                {
+                    netToSEQMap[netID].insert(instance->getInstID());
+                }
+            }
+        }
+    }
+    std::unordered_map<int, std::vector<int>> hplbNetMap; // HPLB_ID -> Net 映射
+
+    // 遍历所有 HPLB, 生成 HPLB_ID -> Net 映射
+    for (const auto &[hplbID, hplb] : globalHPLBMap)
+    {
+        std::vector<int> netSet; // 存储当前 HPLB 相关的网络
+
+        // 遍历 HPLB 内部的 instances
+        for (Instance *instance : hplb->getInstances())
+        {
+            // 遍历 instance 的所有 pins
+            for (int i = 0; i < instance->getNumInpins(); ++i)
+            {
+                Pin *pin = instance->getInpin(i);
+                int netID = pin->getNetID();
+                if (netID != -1) // 跳过未连接的 pin
+                {
+                    netSet.push_back(netID); // 将网络添加到集合
+                }
+            }
+            for (int i = 0; i < instance->getNumOutpins(); ++i)
+            {
+                Pin *pin = instance->getOutpin(i);
+                int netID = pin->getNetID();
+                if (netID != -1) // 跳过未连接的 pin
+                {
+                    netSet.push_back(netID); // 将网络添加到集合
+                }
+            }
+        }
+
+        // 将 HPLB_ID 和对应的网络集合插入映射
+        hplbNetMap[hplbID] = std::move(netSet);
+    }
+
+    std::unordered_set<int> assignedSEQ; // 用于记录已分配的 SEQ
+    // 遍历每个 HPLB
+    for (auto &[hplbID, netSet] : hplbNetMap)
+    {
+        HPLB *hplb = globalHPLBMap[hplbID];
+        std::unordered_map<int, int> seqFrequency; // SEQ -> 出现次数的映射
+        int cur_inst_x = std::get<0>(hplb->getLocation());
+        int cur_inst_y = std::get<1>(hplb->getLocation());
+
+        // 获取当前tile下的seq集合，添加进入 seqFrequency
+        auto neighbor_SEQ_xy = getNeighborTiles(cur_inst_x, cur_inst_y, 1);
+        for (auto xy_temp : neighbor_SEQ_xy)
+        {
+
+            Tile *base_tile = chip.getTile(std::get<0>(xy_temp), std::get<1>(xy_temp));
+            slotArr temp_slotarr = *(base_tile->getInstanceByType("SEQ"));
+            std::list<int> instances_base;
+            for (int idx = 0; idx < (int)temp_slotarr.size(); idx++)
+            {
+                Slot *slot = temp_slotarr[idx];
+                instances_base = slot->getBaselineInstances();
+                for (const auto &element_inst : instances_base)
+                {
+                    seqFrequency[element_inst]++;
+                }
+            }
+        }
+
+        // 遍历 HPLB 的网络集合
+        for (int netID : netSet)
+        {
+            // 查找网络对应的 SEQ
+            if (netToSEQMap.count(netID))
+            {
+                for (int seqID : netToSEQMap[netID])
+                {
+                    // 如果 SEQ 已经分配，跳过
+                    if (assignedSEQ.count(seqID))
+                        continue;
+                    seqFrequency[seqID] += 2; // 记录 SEQ 的出现次数
+                }
+            }
+        }
+
+        // 将 SEQ 按出现次数排序
+        std::vector<std::pair<int, int>> sortedSEQ(seqFrequency.begin(), seqFrequency.end());
+        std::sort(sortedSEQ.begin(), sortedSEQ.end(),
+                  [](const auto &a, const auto &b)
+                  { return a.second > b.second; });
+
+        // 选取前 8 个 SEQ 并添加到 HPLB
+        int addedSEQCount = 0;
+        int z_seq = 0;
+        for (const auto &[seqID, freq] : sortedSEQ)
+        {
+            if (addedSEQCount >= 8)
+                break;
+
+            Instance *seqInstance = glbInstMap[seqID];
+            if (!seqInstance->isLUTInitial())
+            {
+                // 将 SEQ 添加到 HPLB
+                if (hplb->addSeqInstance(seqInstance))
+                {
+                    seqInstance->setHplbID(hplbID);
+                    seqInstance->setLUTInitial(true);
+                    if (seqInstance->getInstID() == 7216 || seqInstance->getInstID() == 7232)
+                    {
+                        int dummy = 0;
+                    }
+                    
+                    seqInstance->setLocation(std::make_tuple(std::get<0>(hplb->getLocation()), std::get<1>(hplb->getLocation()), z_seq + 8 * std::get<2>(hplb->getLocation())));
+                    Tile *tile_temp_addInstance = chip.getTile(std::get<0>(hplb->getLocation()), std::get<1>(hplb->getLocation()));
+                    if (std::get<2>(hplb->getLocation()) == 0)
+                    {
+                        tile_temp_addInstance->addInstance(seqInstance->getInstID(), z_seq, seqInstance->getModelName(), false);
+                    }
+                    else
+                    {
+                        tile_temp_addInstance->addInstance(seqInstance->getInstID(), z_seq + 8, seqInstance->getModelName(), false);
+                    }
+
+                    assignedSEQ.insert(seqID); // 记录为已分配
+                    ++addedSEQCount;
+                    z_seq++;
+                }
+                else
+                {
+                    int dummy = 0;
+                }
+            }
+        }
+    }
+    // > 进行SEQ的匹配
+
+    // 未被匹配的SEQ就近放置
+    std::vector<Instance *> unmatchedSEQ; // 未匹配的SEQ
+    // 遍历所有 SEQ
+    for (auto &[instID, instance] : glbInstMap)
+    {
+        if (instance->getModelName().substr(0, 3) == "SEQ" && assignedSEQ.count(instID) == 0)
+        {
+            unmatchedSEQ.push_back(instance);
+        }
+    }
+    for (size_t i = 0; i < unmatchedSEQ.size(); i++)
+    {
+        Instance *seqInstance = unmatchedSEQ[i];
+        auto unmatchedSeqLoc = unmatchedSEQ[i]->getLocation();
+        int temp_x = std::get<0>(unmatchedSeqLoc);
+        int temp_y = std::get<1>(unmatchedSeqLoc);
+        int temp_z = std::get<2>(unmatchedSeqLoc);
+        bool temp_one_flag = true;
+        int seq_search_range = 0;
+        while (temp_one_flag)
+        {
+            Tile *tile_ptr = chip.getTile(temp_x, temp_y);
+            // std::set<std::string> tileTypes = tile_ptr->getTileTypes();
+            if (tile_ptr == nullptr || !isPLB[temp_x][temp_y])
+            {
+                auto tempXY = getNeighborTile(temp_x, temp_y);
+                temp_x = std::get<0>(tempXY);
+                temp_y = std::get<1>(tempXY);
+                continue; // 跳过无效的 Tile
+            }
+
+            int z_offset = tile_ptr->findOffset(seqInstance->getModelName(), seqInstance, false);
+            if (z_offset != -1)
+            {
+                tile_ptr->addInstance(seqInstance->getInstID(), z_offset, seqInstance->getModelName(), false);
+                seqInstance->setLocation(std::make_tuple(temp_x, temp_y, z_offset));
+                seqInstance->setLUTInitial(true);
+                temp_one_flag = false;
+                neighbor_PLB_xy.clear();
+            }
+            else
+            {
+                if (!neighbor_PLB_xy.empty())
+                {
+                    temp_x = std::get<0>(neighbor_PLB_xy[0]);
+                    temp_y = std::get<1>(neighbor_PLB_xy[0]);
+                    neighbor_PLB_xy.erase(neighbor_PLB_xy.begin());
+                }
+                else
+                {
+                    neighbor_PLB_xy = getNeighborTiles(temp_x, temp_y, seq_search_range);
+                    temp_x = std::get<0>(neighbor_PLB_xy[0]);
+                    temp_y = std::get<1>(neighbor_PLB_xy[0]);
+                    neighbor_PLB_xy.erase(neighbor_PLB_xy.begin());
+                    seq_search_range++;
+                }
+            }
+        }
+    }
+}
+
+//--------------------------------
+
+// 初始化 glbPackInstMap_HPLB , 在完成LUT与SEQ的打包之后
+void initialGlbPackInstMap_HPLB(bool isSeqPack)
+{
+    // for (int i = 0; i < chip.getNumCol(); i++)
+    // {
+    //     for (int j = 0; j < chip.getNumRow(); j++)
+    //     {
+    //         Tile *tile = chip.getTile(i, j);
+    //         for (auto mapIter = tile->getInstanceMapBegin(); mapIter != tile->getInstanceMapEnd(); mapIter++)
+    //         {
+    //             if (!globalHPLBMap.count(1000 * i + j) && !globalHPLBMap.count(-1000 * i - j))
+    //             {
+    //                 int dummy = 0;
+    //             }
+    //         }
+    //     }
+    // }
+
+    for (auto &entry : globalHPLBMap)
+    {
+        int hplb_ID = entry.first;
+        HPLB *hplb = entry.second;
+        hplb->collectNetIDs();
+        Instance *firstInst = *hplb->getInstances().begin();
+        for (auto &instance : hplb->getInstances())
+        {
+            firstInst->addMapInstID(instance->getInstID());
+        }
+    }
+    int dummy = 0;
+}
+
+void initialGlbPackNetMap_HPLB()
+{
+    std::cout << " --- 生成新的 globalHPLBNetMap ---" << std::endl;
+    int newNetPackID = 0;
+    for (auto iter : glbNetMap)
+    {
+        auto netID = iter.first;
+        auto net = iter.second;
+        oldNetID2newNetID.insert(std::make_pair(netID, newNetPackID)); // 建立旧netID到新netID的映射
+        // 处理InPin
+        auto currentInPin = net->getInpin();
+        if (currentInPin->getInstanceOwner()->getMapInstID().size() == 0)
+        {
+            continue;
+        }
+
+        Pin *newInPin = new Pin(newNetPackID, currentInPin->getProp(), currentInPin->getTimingCritical(), nullptr);
+        newInPin->setInstanceOwner(currentInPin->getInstanceOwner()->getOwnerInstance());
+
+        Net *newNet = new Net(newNetPackID);
+        newNet->setClock(net->isClock());
+        newNet->setInpin(newInPin);
+        for (auto currentOutPin : net->getOutputPins())
+        {
+            Pin *newOutPin = new Pin(newNetPackID, currentOutPin->getProp(), currentOutPin->getTimingCritical(), nullptr);
+            newOutPin->setInstanceOwner(currentOutPin->getInstanceOwner()->getOwnerInstance());
+            newNet->addPinIfUnique(newOutPin);
+            // auto inst = pin->getInstanceOwner();
+        }
+
+        glbPackNetMap.insert(std::make_pair(newNetPackID, newNet));
+        newNetPackID++;
+    }
+}
+// 还原最终结果映射
+void recoverAllMap_HPLB(bool isSeqPack)
+{
+    std::cout << "还原所有映射" << std::endl;
+    for (auto inst : glbPackInstMap)
+    {
+        auto instance = inst.second;
+        auto location = instance->getLocation();
+        int x = std::get<0>(location);
+        int y = std::get<1>(location);
+        int z = std::get<2>(location);
+
+        if (isSeqPack)
+        {
+            if (instance->getModelName().substr(0, 3) == "SEQ")
+            {
+                auto instVec = instance->getMapInstID();
+                if (z == 0)
+                {
+                    for (int i = 0; i < instVec.size(); i++)
+                    {
+                        glbInstMap[instVec[i]]->setLocation(std::make_tuple(x, y, i));
+                    }
+                }
+                if (z == 1)
+                {
+                    for (int i = 0; i < instVec.size(); i++)
+                    {
+                        glbInstMap[instVec[i]]->setLocation(std::make_tuple(x, y, i + 8));
+                    }
+                }
+            }
+            else
+            {
+                auto instVec = instance->getMapInstID();
+                for (int i = 0; i < instVec.size(); i++)
+                {
+                    glbInstMap[instVec[i]]->setLocation(location);
+                }
+            }
+        }
+        else
+        {
+            auto instVec = instance->getMapInstID();
+            for (int i = 0; i < instVec.size(); i++)
+            {
+                glbInstMap[instVec[i]]->setLocation(location);
+            }
+        }
+    }
+}
+
+void generateCompleteGlobalHPLBMap()
+{
+    globalHPLBMap.clear();
+    int pid_count = 0;
+    for (int i = 0; i < chip.getNumCol(); i++)
+    {
+        for (int j = 0; j < chip.getNumRow(); j++)
+        {
+            Tile *tile = chip.getTile(i, j);
+            if (!tile) // 确保 tile 不为 nullptr
+                continue;
+
+            // 分别存储大于和小于等于 idxThreshold 的实例
+            std::list<int> HPLBhigh;
+            std::list<int> HPLBlow;
+            // 创建两个 HPLB：一个用于 z <= 3，另一个用于 z > 3
+            HPLB *hplbLow = new HPLB(2 * pid_count, false, std::make_tuple(-1, -1, 0));      // hplb_Z = 0
+            HPLB *hplbHigh = new HPLB(2 * pid_count + 1, false, std::make_tuple(-1, -1, 1)); // hplb_Z = 1
+
+            for (auto mapIter = tile->getInstanceMapBegin(); mapIter != tile->getInstanceMapEnd(); ++mapIter)
+            {
+                std::string modelType = mapIter->first;
+                slotArr slots = mapIter->second;
+                int idxThreshold = slots.size();
+                // 遍历 slots
+                for (int idx = 0; idx < (int)slots.size(); idx++)
+                {
+                    Slot *slot = slots[idx];
+                    if (!slot) // 确保 slot 不为 nullptr
+                        continue;
+
+                    // 获取 slot 的优化实例
+                    std::list<int> instances_temp = slot->getOptimizedInstances();
+
+                    // 遍历实例并分类
+                    for (int instance : instances_temp)
+                    {
+                        if (idx > idxThreshold / 2)
+                        {
+                            // HPLBhigh.push_back(instance);
+                            hplbHigh->addInstance(glbInstMap[instance]);
+                            hplbHigh->setIsFixed(glbInstMap[instance]->isFixed());
+                            hplbHigh->setLocation(std::get<0>(glbInstMap[instance]->getLocation()), std::get<1>(glbInstMap[instance]->getLocation()), 1);
+                            glbInstMap[instance]->setHplbID(pid_count * 2 + 1);
+                        }
+                        else
+                        {
+                            // HPLBlow.push_back(instance);
+                            hplbLow->addInstance(glbInstMap[instance]);
+                            hplbLow->setIsFixed(glbInstMap[instance]->isFixed());
+                            hplbLow->setLocation(std::get<0>(glbInstMap[instance]->getLocation()), std::get<1>(glbInstMap[instance]->getLocation()), 0);
+                            glbInstMap[instance]->setHplbID(pid_count * 2);
+                        }
+                    }
+                }
+            }
+            // 如果 HPLB 有实例，加入到全局 HPLB 集合
+            if (hplbLow->getInstanceCount() != 0)
+            {
+                globalHPLBMap[pid_count * 2] = hplbLow; // 为低区设置唯一 ID（例如 plbID * 2）
+            }
+            if (hplbHigh->getInstanceCount() != 0)
+            {
+                globalHPLBMap[pid_count * 2 + 1] = hplbHigh; // 为高区设置唯一 ID（例如 plbID * 2 + 1）
+            }
+            if (hplbLow->getInstanceCount() != 0 || hplbHigh->getInstanceCount() != 0)
+                pid_count++;
+        }
+    }
     int dummy = 0;
 }

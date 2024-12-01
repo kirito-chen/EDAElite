@@ -27,3 +27,4 @@ int glbInitTopSum;                              // 记录初始top的分子之�
 
 std::map<int, int> oldNetID2newNetID; // 全局映射，存放旧netID到新netID的映射
 std::vector<std::tuple<int, int>> neighbor_PLB_xy;
+std::map<int, Net *> globalHPLBNetMap; // 全局变量存储新的HPLB net

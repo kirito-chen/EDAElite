@@ -48,4 +48,5 @@ extern int glbTopKNum;                                 // 统计PLB的5%数量  
 extern int glbInitTopSum;                              // 记录初始top的分子之和
 
 extern std::map<int, HPLB *> globalHPLBMap; // 全局变量存储所有 HPLB 实例
+extern std::map<int, Net *> globalHPLBNetMap; // 全局变量存储新的HPLB net
 extern std::vector<std::tuple<int, int>> neighbor_PLB_xy;

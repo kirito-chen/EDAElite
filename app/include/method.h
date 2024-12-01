@@ -43,8 +43,14 @@ std::tuple<int, int> getNeighborTile_Jiu(int x, int y, bool isLeft = true);
 
 void initialGlbPackInstMap(bool isSeqPack);
 void initialGlbPackNetMap();
-void initialGlbPackNetMap_Jiu();
 void recoverAllMap(bool isSeqPack);
+void initialGlbPackNetMap_Jiu();
+
+
+void initialGlbPackInstMap_HPLB(bool isSeqPack);
+void initialGlbPackNetMap_HPLB();
+void recoverAllMap_HPLB(bool isSeqPack);
+
 
 bool findBigNetId(int pinNumLimit); // 如果存在 引脚数 > pinNumLimit 的netId 的net则返回true，id存储在 glbBigNet 中
 
@@ -63,3 +69,14 @@ void processPLBGroups(
     std::unordered_map<int, std::unordered_set<int>> &lutGroupNetMap,
     int maxGroupCount);
 void packLUTtoHPLB(); // 将LUT_pair 打包成为只有LUT的HPLB，SEQ交给SA进行位置调整
+void packSEQtoHPLB(); // 将SEQ添加到当前的HPLB内部
+void generateCompleteGlobalHPLBMap();   // 建立全局的globalHPLBMap
+
+
+
+
+
+
+
+
+

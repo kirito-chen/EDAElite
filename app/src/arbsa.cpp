@@ -13,7 +13,7 @@
 
 // #define DEBUG
 // #define EXTERITER  //是否固定外部循环次数
-#define INFO           // 是否输出每次的迭代信息
+#define INFO          // 是否输出每次的迭代信息
 #define TIME_LIMIT 30 // 时间限制
 
 // 全局随机数生成器
@@ -639,7 +639,6 @@ std::tuple<int, int, int> findSuitableLoc(bool isBaseline, int x, int y, int ran
     while (!coordinates.empty())
     {
         int randomIndex = generate_random_int(0, coordinates.size() - 1);
-        ;
         xx = coordinates[randomIndex].first;
         yy = coordinates[randomIndex].second;
 #ifdef DEBUG
@@ -941,7 +940,6 @@ int arbsa(bool isBaseline, std::string nodesFile)
     NestedMap jsonData;
 
     if (fileExists(filename))
-    if (false)
     {
         jsonData = readJsonFile(filename);
         if (jsonData[caseName].find(std::to_string(timeLimit)) != jsonData[caseName].end())
@@ -1020,6 +1018,9 @@ int arbsa(bool isBaseline, std::string nodesFile)
                 cost = cost - bigNetCostPre + bigNetCostCur;
                 bigNetCostPre = bigNetCostCur;
                 hitBigNet = 0;
+                // 顺带更新range与fitness
+                //  calculRelatedRangeMap(isBaseline, rangeActualMap, glbBigNet);
+                //  calculRelatedFitness(fitnessVec, rangeDesiredMap, rangeActualMap, glbBigNet);
             }
 
             if (Iter % 100 == 0)
@@ -1159,7 +1160,7 @@ int arbsa(bool isBaseline, std::string nodesFile)
             double eDetaT = exp(-deta / T);
             // if deta < 0 更新这个操作到布局中，更新fitness列表
             // if ((deta < 0 || randomValue < eDetaT) && tryUpdatePinDensity(originLoc, loc))
-            if ((deta < 0 || randomValue < eDetaT))
+            if (deta < 0 || randomValue < eDetaT)
             {
                 // 间隔次数多了再更新这两
                 // calculRelatedRangeMap(isBaseline, rangeActualMap, instRelatedNetId);
@@ -1239,7 +1240,6 @@ int arbsa(bool isBaseline, std::string nodesFile)
 #endif
     return 0;
 }
-
 
 bool isPackValid(bool isBaseline, int x, int y, int &z, Instance *inst, bool isSeqPack)
 { // 判断这个位置是否可插入该inst，如果可插入则返回z值
@@ -1946,7 +1946,7 @@ int newArbsa(bool isBaseline, std::string nodesFile, bool isSeqPack)
     // 计算初始cost
     int cost = 0, costNew = 0;
     cost = getPackWirelength(isBaseline);
-    
+
     // 自适应参数
     int counterNet = 0;
     const int counterNetLimit = 800;
@@ -2331,7 +2331,6 @@ int newArbsa(bool isBaseline, std::string nodesFile, bool isSeqPack)
     std::cout << "runtime/exterIterLimit:" << duration.count() / (exterIterLimit) << " runtime/iter:" << duration.count() / ((exterIterLimit) * 2000) << std::endl;
 #endif
 
-    
     // 还原最终结果映射
     recoverAllMap(isSeqPack);
 
@@ -2580,7 +2579,7 @@ int newArbsa_Jiu(bool isBaseline, bool isSeqPack)
                     for (auto &pin : instMatch->getInpins())
                     {
                         int netId = pin->getNetID();
-                        
+
                         //-1表示未连接
                         if (netId != -1)
                             instRelatedNetId.insert(oldNetID2newNetID[pin->getNetID()]);
@@ -2589,7 +2588,7 @@ int newArbsa_Jiu(bool isBaseline, bool isSeqPack)
                     for (auto &pin : instMatch->getOutpins())
                     {
                         int netId = pin->getNetID();
-                        
+
                         //-1表示未连接
                         if (netId != -1)
                             instRelatedNetId.insert(oldNetID2newNetID[pin->getNetID()]);
@@ -2613,10 +2612,9 @@ int newArbsa_Jiu(bool isBaseline, bool isSeqPack)
             {
                 originLoc = inst->getLocation();
                 inst->setLocation(loc);
-                
             }
             int afterNetWL = getPackRelatedWirelength(isBaseline, instRelatedNetId);
-            int costNew = cost - beforeNetWL + afterNetWL;            
+            int costNew = cost - beforeNetWL + afterNetWL;
             int deta = costNew - cost;
 #ifdef DEBUG
             std::cout << "DEBUG-deta:" << deta << std::endl;
@@ -2716,8 +2714,6 @@ int newArbsa_Jiu(bool isBaseline, bool isSeqPack)
     return 0;
 }
 
-
-
 // 适用于 Pack 的更新密度函数
 bool tryPackUpdatePinDensity(std::tuple<int, int, int> originLoc, std::tuple<int, int, int> loc)
 {
@@ -2797,3 +2793,6 @@ bool tryPackUpdatePinDensity(std::tuple<int, int, int> originLoc, std::tuple<int
         return true;
     }
 }
+
+
+//-------------------------

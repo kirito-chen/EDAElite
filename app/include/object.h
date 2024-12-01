@@ -417,6 +417,7 @@ public:
     void unionOutputPins(const std::vector<Pin *> &vec1);
 
     Instance *getPackInstance();
+    Instance *getOwnerInstance();
 };
 
 class Net
@@ -668,6 +669,8 @@ private:
     std::set<int> ceNets;  // CE引脚
     std::set<int> srNets;  // RESET引脚
 
+    std::vector<int> netIDs; // 存放与HPLB中的所有实例相关的netID
+
 public:
     // 默认构造函数
     HPLB() : id(-1)
@@ -787,5 +790,47 @@ public:
             return true;
         }
         return false;
+    }
+    // 获取所有与HPLB内实例相关的netID
+    void collectNetIDs()
+    {
+        // 清空现有的netID列表，防止重复添加
+        netIDs.clear();
+
+        // 遍历所有实例，获取与实例相关的netID
+        for (Instance *inst : instances)
+        {
+            for (Pin *pin : inst->getInpins())
+            {
+                int netID = pin->getNetID();
+                if (netID == -1)
+                {
+                    continue;
+                }
+                if (std::find(netIDs.begin(), netIDs.end(), netID) == netIDs.end())
+                {
+                    netIDs.push_back(netID); // 如果netID不重复，加入列表
+                }
+            }
+
+            for (Pin *pin : inst->getOutpins())
+            {
+                int netID = pin->getNetID();
+                if (netID == -1)
+                {
+                    continue;
+                }
+                
+                if (std::find(netIDs.begin(), netIDs.end(), netID) == netIDs.end())
+                {
+                    netIDs.push_back(netID); // 如果netID不重复，加入列表
+                }
+            }
+        }
+    }
+    // 获取netID列表
+    const std::vector<int> &getNetIDs() const
+    {
+        return netIDs;
     }
 };

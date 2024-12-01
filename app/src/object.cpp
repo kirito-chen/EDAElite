@@ -2339,3 +2339,17 @@ Instance *Instance::getPackInstance()
     }
   }
 }
+
+Instance *Instance::getOwnerInstance()
+{
+  if (!instMapIDVec.empty())
+  {
+    return this; // 不为空则返回当前instance
+  }
+  else
+  {
+    HPLB *hplb = globalHPLBMap[hplbID];
+    Instance *ownerInstance = *(hplb->getInstances().begin());
+    return ownerInstance;
+  }
+}

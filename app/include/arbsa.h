@@ -24,3 +24,4 @@ int calculPackrangeMap(bool isBaseline, std::map<int, int> &rangeActualMap);
 int calculPackRelatedRangeMap(bool isBaseline, std::map<int, int> &rangeActualMap, const std::set<int> &instRelatedNetId);
 int newArbsa(bool isBaseline, std::string nodesFile, bool isSeqPack);
 bool tryPackUpdatePinDensity(std::tuple<int, int, int> originLoc, std::tuple<int, int, int> loc);
+int arbsa_liangciyidong(bool isBaseline, std::string nodesFile);

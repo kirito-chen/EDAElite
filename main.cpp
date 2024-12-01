@@ -110,21 +110,25 @@ int main(int argc, char *argv[])
     }
     else
     {
-        readOutputNetlist(nodesFile);
         // setPinDensityMapAndTopValues();
-
+        readOutputNetlist(nodesFile);
         matchLUTPairs(glbInstMap, true, isSeqPack); // 打包代码
+        
         printInstanceInformation();
         legalCheck();
         reportWirelength();
         // 模拟退火
         newArbsa(isBaseline, nodesFile, isSeqPack);
-        
+        generateOutputFile(isBaseline, outFile);
+
+        // 模拟退火
+        // newArbsa(isBaseline, nodesFile, isSeqPack);
+
         // 旧的模拟退火
         // newArbsa_Jiu(isBaseline, isSeqPack);
-        
-        // 生成结果
-        generateOutputFile(isBaseline, outFile);
+
+        // // 生成结果
+        // generateOutputFile(isBaseline, outFile);
     }
 
     if (false)
